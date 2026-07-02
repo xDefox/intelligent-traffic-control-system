@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4320995382077394}
   - component: {fileID: 33986971871583076}
   - component: {fileID: 23897524296188826}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object004
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -100,7 +100,7 @@ GameObject:
   - component: {fileID: 4872715787176878}
   - component: {fileID: 33290171747961834}
   - component: {fileID: 23301199135736624}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object006
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -189,7 +189,7 @@ GameObject:
   - component: {fileID: 4907551743973842}
   - component: {fileID: 33067074148266492}
   - component: {fileID: 23253293620079004}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object008
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -278,7 +278,7 @@ GameObject:
   - component: {fileID: 4942120795113776}
   - component: {fileID: 33803517687558392}
   - component: {fileID: 23398125768832394}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object003
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -367,7 +367,7 @@ GameObject:
   - component: {fileID: 4453798734306758}
   - component: {fileID: 33646056093240720}
   - component: {fileID: 23713012142565998}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object007
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -457,7 +457,7 @@ GameObject:
   - component: {fileID: 6549741675271800491}
   - component: {fileID: -5388586550232507122}
   - component: {fileID: 3926127861743165881}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Car_4
   m_TagString: Car
   m_Icon: {fileID: 0}
@@ -482,7 +482,6 @@ Transform:
   - {fileID: 4872715787176878}
   - {fileID: 4453798734306758}
   - {fileID: 4907551743973842}
-  - {fileID: 21529751406820805}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &6549741675271800491
@@ -500,6 +499,8 @@ MonoBehaviour:
   waypoints: []
   speed: 5
   rotationSpeed: 10
+  maxCheckDistance: 4
+  turnAngleThreshold: 15
 --- !u!54 &-5388586550232507122
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -546,58 +547,5 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1.5229855, y: 1, z: 2.2781065}
-  m_Center: {x: -0.024644375, y: 0.41999996, z: -0.03636372}
---- !u!1 &6683648338584891910
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 21529751406820805}
-  - component: {fileID: 3753679943469887427}
-  m_Layer: 0
-  m_Name: DistanceSensor
-  m_TagString: DistanceSensor
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &21529751406820805
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6683648338584891910}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.083336234, y: 0, z: -0.6396885}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4870167790249810}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!65 &3753679943469887427
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6683648338584891910}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1.7000407, z: 0.6864233}
-  m_Center: {x: 0, y: 0.35002035, z: 2.2474813}
+  m_Size: {x: 1.2582674, y: 1.1716967, z: 2.2781065}
+  m_Center: {x: 0, y: 0.085848436, z: 0}
