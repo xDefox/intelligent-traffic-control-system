@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4786165216473404}
   - component: {fileID: 33846728464820042}
   - component: {fileID: 23872015978594554}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object005
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -100,7 +100,7 @@ GameObject:
   - component: {fileID: 4760845229251968}
   - component: {fileID: 33183683889693866}
   - component: {fileID: 23454689495253346}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object015
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -189,7 +189,7 @@ GameObject:
   - component: {fileID: 4652618803402950}
   - component: {fileID: 33730543002999836}
   - component: {fileID: 23008349884360502}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object017
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -278,7 +278,7 @@ GameObject:
   - component: {fileID: 4008337089251462}
   - component: {fileID: 33375504403848472}
   - component: {fileID: 23850419312566916}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: police_car
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -368,7 +368,7 @@ GameObject:
   - component: {fileID: 2457058149937193279}
   - component: {fileID: 4032842962026336455}
   - component: {fileID: 843877117419241266}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Taxi
   m_TagString: Car
   m_Icon: {fileID: 0}
@@ -393,7 +393,6 @@ Transform:
   - {fileID: 4955056900105520}
   - {fileID: 4652618803402950}
   - {fileID: 4008337089251462}
-  - {fileID: 4839395269299765963}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2457058149937193279
@@ -411,6 +410,8 @@ MonoBehaviour:
   waypoints: []
   speed: 5
   rotationSpeed: 10
+  maxCheckDistance: 4
+  turnAngleThreshold: 15
 --- !u!54 &4032842962026336455
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -457,8 +458,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1.5229855, y: 1, z: 2.2781065}
-  m_Center: {x: -0.024644375, y: 0.41999996, z: -0.03636372}
+  m_Size: {x: 1.2582674, y: 1.1716967, z: 2.2781065}
+  m_Center: {x: 0, y: 0.085848436, z: 0}
 --- !u!1 &1770694637400948
 GameObject:
   m_ObjectHideFlags: 0
@@ -470,7 +471,7 @@ GameObject:
   - component: {fileID: 4955056900105520}
   - component: {fileID: 33264542208718286}
   - component: {fileID: 23306454348383526}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object016
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -548,56 +549,3 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!1 &8028848903523216324
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4839395269299765963}
-  - component: {fileID: 8984434314044279858}
-  m_Layer: 0
-  m_Name: DistanceSensor
-  m_TagString: DistanceSensor
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &4839395269299765963
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8028848903523216324}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.016254663, y: 0, z: -0.6411154}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4870167790249810}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!65 &8984434314044279858
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8028848903523216324}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1.7000407, z: 0.6864233}
-  m_Center: {x: 0, y: 0.35002035, z: 2.2474813}

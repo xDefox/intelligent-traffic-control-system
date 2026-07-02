@@ -3,22 +3,28 @@ using System.Collections.Generic;
 
 public class WaypointNavigator : MonoBehaviour
 {
+    [Header("Настройки движения")]
     public List<Transform> waypoints = new List<Transform>();
     public float speed = 5f;
     public float rotationSpeed = 10f;
 
-    private int currentWaypointIndex = 0;
+    [Header("Дистанция и Векторы")]
+    [Tooltip("Дистанция до машины впереди (2.2 — идеальный плотный поджим)")]
+    public float maxCheckDistance = 2.2f;
+    [Tooltip("Угол поворота (в градусах), при котором луч полностью гаснет")]
+    public float turnAngleThreshold = 15f;
 
-    // Флаги состояния движения
-    private bool isStoppedByLight = false;
-    private bool isStoppedByCarInFront = false;
+    private int currentWaypointIndex = 0;
     private float originalSpeed;
 
+    // Светофор
+    private bool isStoppedByLight = false;
+    private bool isOnIntersection = false;
+    private string lastStopReason = "Едет";
+
+    // Встречный поток
     private OncomingTrafficDetector oncomingDetector;
     private int stopWaypointIndex = 0;
-
-    // Для отслеживания текущего состояния логирования
-    private string lastStopReason = "Едет";
 
     void Start()
     {
@@ -34,7 +40,8 @@ public class WaypointNavigator : MonoBehaviour
 
         if (waypoints.Count > 0)
         {
-            transform.LookAt(new Vector3(waypoints[0].position.x, transform.position.y, waypoints[0].position.z));
+            Vector3 lookTarget = new Vector3(waypoints[0].position.x, transform.position.y, waypoints[0].position.z);
+            transform.LookAt(lookTarget);
         }
     }
 
@@ -43,27 +50,66 @@ public class WaypointNavigator : MonoBehaviour
         if (waypoints == null || waypoints.Count == 0) return;
 
         string currentReason = "Едет";
+        Transform targetWaypoint = waypoints[currentWaypointIndex];
 
-        // 1. Проверка светофора
+        // Базовая рабочая дистанция
+        float actualMaxDistance = 2.2f;
+
+        // ЕСЛИ МЫ НА ПЕРЕКРЕСТКЕ: укорачиваем луч до минимума, чтобы не бить в бока
+        if (isOnIntersection)
+        {
+            actualMaxDistance = 0.5f;
+        }
+
+        // Считаем угол до цели
+        Vector3 directionToTarget = (targetWaypoint.position - transform.position).normalized;
+        directionToTarget.y = 0;
+        float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
+
+        bool carDetectedInFront = false;
+
+        Vector3 rayStart = transform.position + Vector3.up * 0.4f + transform.forward * 0.6f;
+        Vector3 rayEnd = rayStart + transform.forward * actualMaxDistance;
+
+        // Если едем прямо И не на перекрестке (или на перекрестке, но с коротким лучом)
+        if (angleToTarget < turnAngleThreshold)
+        {
+            RaycastHit hit;
+            int layerMask = LayerMask.GetMask("Traffic");
+
+            Debug.DrawLine(rayStart, rayEnd, Color.red);
+
+            if (Physics.Raycast(rayStart, transform.forward, out hit, actualMaxDistance, layerMask))
+            {
+                if (hit.collider.gameObject != gameObject)
+                {
+                    carDetectedInFront = true;
+                }
+            }
+        }
+        else
+        {
+            Debug.DrawLine(rayStart, rayStart + transform.forward * 0.5f, Color.green);
+        }
+
+        // Логика торможения
         if (isStoppedByLight)
         {
             speed = 0f;
-            currentReason = "Стоит перед светофором (StopTrigger)";
+            currentReason = "Стоит перед светофором";
         }
-        // 2. Проверка дистанции до машины впереди
-        else if (isStoppedByCarInFront)
+        else if (carDetectedInFront)
         {
             speed = 0f;
-            currentReason = "Держит дистанцию (Машина впереди в зоне бампера)";
+            currentReason = "Держит дистанцию";
         }
-        // 3. Проверка детектора встречки у стоп-линии
         else if (oncomingDetector != null && !oncomingDetector.IsClear && currentWaypointIndex == stopWaypointIndex)
         {
             float distanceToStop = Vector3.Distance(transform.position, waypoints[stopWaypointIndex].position);
             if (distanceToStop < 1.5f)
             {
                 speed = 0f;
-                currentReason = "Пропускает встречный поток (Детектор занят)";
+                currentReason = "Пропускает встречку";
             }
         }
         else
@@ -71,31 +117,35 @@ public class WaypointNavigator : MonoBehaviour
             speed = originalSpeed;
         }
 
-        // Выводим лог в консоль только при изменении поведения машины, чтобы не спамить
         if (currentReason != lastStopReason)
         {
-            Debug.Log($"[{gameObject.name}] Изменил состояние: {currentReason}. Текущий вейпоинт: {currentWaypointIndex}");
+            Debug.Log($"[{gameObject.name}] {currentReason}");
             lastStopReason = currentReason;
         }
 
         if (speed <= 0f) return;
 
-        // Логика движения к текущему вейпоинту
-        Transform targetWaypoint = waypoints[currentWaypointIndex];
-        Vector3 direction = targetWaypoint.position - transform.position;
-        direction.y = 0;
+        // Движение
+        Vector3 moveDirection = targetWaypoint.position - transform.position;
+        moveDirection.y = 0;
 
-        if (direction != Vector3.zero)
+        if (moveDirection != Vector3.zero)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
         transform.Translate(Vector3.forward * speed * Time.deltaTime);
 
-        if (Vector3.Distance(transform.position, targetWaypoint.position) < 0.5f)
+        if (Vector3.Distance(transform.position, targetWaypoint.position) < 0.6f)
         {
             currentWaypointIndex++;
+
+            // Как только мы доехали до очередной точки — мы гарантированно 
+            // либо проехали перекресток, либо выровнялись на новую прямую.
+            // Возвращаем штатную дистанцию луча обратно!
+            isOnIntersection = false;
+
             if (currentWaypointIndex >= waypoints.Count)
             {
                 Destroy(gameObject);
@@ -103,23 +153,26 @@ public class WaypointNavigator : MonoBehaviour
         }
     }
 
-    // Обработка внешних триггеров (Светофор и Бампер)
     void OnTriggerStay(Collider other)
     {
-        // Проверка светофора
         if (other.CompareTag("StopTrigger"))
         {
+            // Пока мы стоим или тремся в триггере стоп-линии — мы еще НЕ на перекрестке
+            isOnIntersection = false;
+
             TrafficLightViewer trafficLight = other.GetComponentInParent<TrafficLightViewer>();
             if (trafficLight != null)
             {
-                if (trafficLight.GetCurrentLight() == TrafficLightViewer.LightColor.Red ||
-                    trafficLight.GetCurrentLight() == TrafficLightViewer.LightColor.Yellow)
+                TrafficLightViewer.LightColor currentLight = trafficLight.GetCurrentLight();
+                if (currentLight == TrafficLightViewer.LightColor.Red || currentLight == TrafficLightViewer.LightColor.Yellow)
                 {
                     isStoppedByLight = true;
-                    return;
+                }
+                else
+                {
+                    isStoppedByLight = false;
                 }
             }
-            isStoppedByLight = false;
         }
     }
 
@@ -128,12 +181,9 @@ public class WaypointNavigator : MonoBehaviour
         if (other.CompareTag("StopTrigger"))
         {
             isStoppedByLight = false;
-        }
-    }
 
-    // Эти методы будут вызываться из дочернего датчика-бампера
-    public void SetCarInFrontTrigger(bool isBlocked)
-    {
-        isStoppedByCarInFront = isBlocked;
+            // Выехали из триггера стоп-линии -> значит выехали НА перекресток!
+            isOnIntersection = true;
+        }
     }
 }
