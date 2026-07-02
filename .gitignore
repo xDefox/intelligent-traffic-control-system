@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+wheels/
+*.egg-info
+
+# IDE
+.idea/
+Scene/Diplom_scene/.vs/
+Scene/Diplom_scene/*.csproj
+Scene/Diplom_scene/*.sln
+
+# Unity временные папки и логи
+Scene/Diplom_scene/Library/
+Scene/Diplom_scene/library/
+Scene/Diplom_scene/Temp/
+Scene/Diplom_scene/temp/
+Scene/Diplom_scene/Obj/
+Scene/Diplom_scene/obj/
+Scene/Diplom_scene/Build/
+Scene/Diplom_scene/build/
+Scene/Diplom_scene/Logs/
+Scene/Diplom_scene/logs/
+Scene/Diplom_scene/UserSettings/
+Scene/Diplom_scene/usersettings/
+Scene/Diplom_scene/.plastic/
+
