@@ -4,17 +4,19 @@ using UnityEngine.Networking;
 
 public class CameraStreamer : MonoBehaviour
 {
-    // Адрес нашего Python-сервера
     private string serverUrl = "http://127.0.0.1:8050/api/v1/upload-frame";
 
-    // Интервал отправки кадров (например, 5 раз в секунду, чтобы не спамить)
-    public float streamInterval = 0.2f;
+    [Tooltip("Интервал отправки (0.1f = 10 кадров в секунду. Для адаптивного UTC-UX Fusion этого за глаза)")]
+    public float streamInterval = 0.1f;
 
-    private Camera targetCamera;
+    private Texture2D screenshot;
+    private bool isSending = false;
 
     void Start()
     {
-        targetCamera = GetComponent<Camera>();
+        // Создаем текстуру один раз под разрешение экрана (или фиксированное)
+        // Чтобы не грузить CPU, лучше запустить игру в окне 1280x720
+        screenshot = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
         StartCoroutine(StreamFramesCo());
     }
 
@@ -23,28 +25,16 @@ public class CameraStreamer : MonoBehaviour
         while (true)
         {
             yield return new WaitForSeconds(streamInterval);
-            yield return new WaitForEndOfFrame(); // Ждем, пока кадр полностью отрендерится
+            yield return new WaitForEndOfFrame(); // Ждем, когда кадр полностью отрисуется на экране
 
-            // Создаем текстуру по размерам экрана
-            RenderTexture rt = new RenderTexture(Screen.width, Screen.height, 24);
-            targetCamera.targetTexture = rt;
-            Texture2D screenShot = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            // Читаем пиксели прямо с экрана — это НЕ ломает рендер самой камеры
+            screenshot.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            screenshot.Apply();
 
-            targetCamera.Render();
-            RenderTexture.active = rt;
-            screenShot.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
-            screenShot.Apply();
+            // Сжимаем в JPEG (качество 60-70 оптимально для YOLO)
+            byte[] bytes = screenshot.EncodeToJPG(65);
 
-            // Сбрасываем текстуры, чтобы камера продолжала показывать картинку на экран
-            targetCamera.targetTexture = null;
-            RenderTexture.active = null;
-            Destroy(rt);
-
-            // Сжимаем в JPEG (минимальный размер для передачи по сети)
-            byte[] bytes = screenShot.EncodeToJPG(75);
-            Destroy(screenShot);
-
-            // Отправляем байты на Python через HTTP POST
+            // Отправляем асинхронно, чтобы не вешать Unity
             StartCoroutine(SendFrameToServer(bytes));
         }
     }
@@ -57,16 +47,12 @@ public class CameraStreamer : MonoBehaviour
         using (UnityWebRequest www = UnityWebRequest.Post(serverUrl, form))
         {
             yield return www.SendWebRequest();
-
-            if (www.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning("Ошибка отправки кадра: " + www.error);
-            }
-            else
-            {
-                // Тут в будущем мы будем принимать ответ от Python (команды светофору!)
-                // string jsonResponse = www.downloadHandler.text;
-            }
+            // Нам пока не важен ответ, главное — доставить кадр до шлюза
         }
+    }
+
+    void OnDestroy()
+    {
+        if (screenshot != null) Destroy(screenshot);
     }
 }
