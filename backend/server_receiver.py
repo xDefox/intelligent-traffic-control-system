@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="Smart Crossroads Gateway",
-    version="1.0.0",
     description="Шлюз для сбора аналитики загруженности дорог с камер ИИ"
 )
 
@@ -42,6 +41,9 @@ async def update_congestion(data: CongestionData):
             detail=f"Внутренняя ошибка сервера при обработке данных: {str(e)}"
         )
 
+@app.get("/")
+async def root():
+    return {"status": "gateway_online", "info": "Перейди на http://127.0.0.1:8050/docs для просмотра API"}
 
 if __name__ == "__main__":
     # Запускаем сервер на порту 8050, который прописан в скрипте EdgeVisionCamera.cs
