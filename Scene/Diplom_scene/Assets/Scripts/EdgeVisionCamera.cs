@@ -43,11 +43,40 @@ public class EdgeVisionCamera : MonoBehaviour
         new Vector2(0.15f, 0.80f)
     };
 
+    // 1. Добавляем компонент LineRenderer на сам объект камеры для отрисовки ROI
+    private LineRenderer roiLineRenderer;
+
     void Start()
     {
         targetCamera = GetComponent<Camera>();
         rt = new RenderTexture(640, 640, 24);
         inputTensor = new Tensor<float>(new TensorShape(1, 3, 640, 640));
+
+        // Настраиваем LineRenderer для отрисовки 2D-полигона в пространстве камеры
+        roiLineRenderer = gameObject.AddComponent<LineRenderer>();
+        roiLineRenderer.useWorldSpace = false; // РИСУЕМ В ЛОКАЛЬНЫХ КООРДИНАТАХ КАМЕРЫ
+        roiLineRenderer.positionCount = roiPolygon.Length;
+        roiLineRenderer.loop = true;
+        roiLineRenderer.startWidth = 0.02f; // Тонкие линии
+        roiLineRenderer.endWidth = 0.02f;
+
+        // Простейший unlit материал, чтобы линия светилась (зеленым/желтым)
+        roiLineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        roiLineRenderer.startColor = Color.yellow;
+        roiLineRenderer.endColor = Color.yellow;
+
+        // Переводим нормализованные 2D координаты ROI (0..1) в локальные координаты перед камерой
+        for (int i = 0; i < roiPolygon.Length; i++)
+        {
+            // Проецируем точку на плоскость прямо перед камерой (например, на расстоянии 1 метра)
+            // В viewport-координатах: X и Y (0..1), Z - расстояние от линзы
+            Vector3 viewportPoint = new Vector3(roiPolygon[i].x, roiPolygon[i].y, 1.0f);
+            Vector3 localPoint = targetCamera.ViewportToWorldPoint(viewportPoint);
+            // Переводим в локальное пространство объекта камеры
+            localPoint = targetCamera.transform.InverseTransformPoint(localPoint);
+
+            roiLineRenderer.SetPosition(i, localPoint);
+        }
 
         if (yoloModelAsset != null)
         {
@@ -55,11 +84,9 @@ public class EdgeVisionCamera : MonoBehaviour
             engine = new Worker(runtimeModel, BackendType.GPUCompute);
             StartCoroutine(InferenceLoopCo());
         }
-        else
-        {
-            Debug.LogError($"[Ошибка] На объекте {gameObject.name} не назначена модель YOLO ONNX!");
-        }
     }
+
+    // МЕТОД OnGUI() МЫ ПОЛНОСТЬЮ УДАЛЯЕМ
 
     IEnumerator InferenceLoopCo()
     {
@@ -141,28 +168,6 @@ public class EdgeVisionCamera : MonoBehaviour
             }
         }
         cpuOutput?.Dispose();
-    }
-
-    void OnGUI()
-    {
-        // Отрисовка локальной зоны ROI
-        Vector2[] screenPolygon = new Vector2[roiPolygon.Length];
-        for (int i = 0; i < roiPolygon.Length; i++)
-        {
-            screenPolygon[i] = new Vector2(roiPolygon[i].x * Screen.width, (1f - roiPolygon[i].y) * Screen.height);
-        }
-        for (int i = 0; i < screenPolygon.Length; i++)
-        {
-            DrawLine(screenPolygon[i], screenPolygon[(i + 1) % screenPolygon.Length], Color.yellow, 2f);
-        }
-
-        // Отрисовка рамок
-        foreach (var box in detectedBoxes)
-        {
-            DrawScreenRect(box.rect, Color.green, 2f);
-            GUI.backgroundColor = Color.black;
-            GUI.Label(new Rect(box.rect.x, box.rect.y - 20, 150, 20), $"Vehicle: {box.confidence * 100:.0f}%");
-        }
     }
 
     void DrawScreenRect(Rect rect, Color color, float thickness)
