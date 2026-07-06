@@ -911,7 +911,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1835185411356551422}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
@@ -5694,7 +5694,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1835185411627724539}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
@@ -5717,12 +5717,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2232729392458265904}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: 75d08308ab5e36c4d9f0f395bbe77838, type: 3}
+  yoloModelAsset: {fileID: 5022602860645237092, guid: cb338a7eb7318504488bac0ea3b34e37, type: 3}
   detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
