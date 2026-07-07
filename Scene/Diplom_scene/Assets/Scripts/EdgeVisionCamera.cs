@@ -3,7 +3,7 @@ using Unity.InferenceEngine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Networking;
-using UnityEngine.UI; // Обязательно для работы с Image и Outline
+using UnityEngine.UI;
 
 public class EdgeVisionCamera : MonoBehaviour
 {
@@ -14,6 +14,10 @@ public class EdgeVisionCamera : MonoBehaviour
 
     [Range(0f, 1f)]
     public float confidenceThreshold = 0.4f;
+
+    [Range(0f, 1f)]
+    [Tooltip("Порог перекрытия рамок. Чем меньше, тем жестче склеиваются дубликаты (оптимально 0.3 - 0.45)")]
+    public float iouThreshold = 0.4f; // <-- ДОБАВИЛИ ПОРОГ ДЛЯ NMS
 
     [Header("Визуализация рамок (UI Canvas)")]
     [Tooltip("Перетащи сюда Canvas, который создан внутри этой камеры")]
@@ -33,7 +37,6 @@ public class EdgeVisionCamera : MonoBehaviour
 
     private struct BoundingBox
     {
-        // Нормализованные координаты (0..1), где (0,0) - левый нижний угол (стандарт Unity)
         public float xCenter, yCenter, width, height;
         public float confidence;
     }
@@ -42,7 +45,6 @@ public class EdgeVisionCamera : MonoBehaviour
     private HashSet<int> vehicleClassIds = new HashSet<int> { 2, 3, 5, 7 };
 
     [Header("Зона детекции (ROI) для этой камеры")]
-    [Tooltip("Задай 4 точки полигона в нормализованных координатах (от 0 до 1)")]
     public Vector2[] roiPolygon = new Vector2[]
     {
         new Vector2(0.35f, 0.14f),
@@ -59,7 +61,6 @@ public class EdgeVisionCamera : MonoBehaviour
         rt = new RenderTexture(640, 640, 24);
         inputTensor = new Tensor<float>(new TensorShape(1, 3, 640, 640));
 
-        // Отрисовка желтого ROI — ДЕЛАЕМ ЛИНИЮ ТОНЬШЕ (0.005f вместо 0.02f)
         roiLineRenderer = gameObject.AddComponent<LineRenderer>();
         roiLineRenderer.useWorldSpace = false;
         roiLineRenderer.positionCount = roiPolygon.Length;
@@ -78,18 +79,16 @@ public class EdgeVisionCamera : MonoBehaviour
             roiLineRenderer.SetPosition(i, localPoint);
         }
 
-        // НАСТРОЙКА КАНВАСА И СОЗДАНИЕ КРАСИВЫХ РАМОК
         if (targetCanvas != null)
         {
             targetCanvas.renderMode = RenderMode.ScreenSpaceCamera;
             targetCanvas.worldCamera = targetCamera;
-            targetCanvas.planeDistance = 0.4f; // Чуть ближе желтой линии, чтобы не перекрывались
+            targetCanvas.planeDistance = 0.4f;
 
             canvasRectTransform = targetCanvas.GetComponent<RectTransform>();
 
             for (int i = 0; i < maxVisibleBoxes; i++)
             {
-                // Главный контейнер рамки
                 GameObject boxObj = new GameObject($"UI_Box_{i}", typeof(RectTransform), typeof(Image));
                 boxObj.transform.SetParent(targetCanvas.transform, false);
 
@@ -98,11 +97,9 @@ public class EdgeVisionCamera : MonoBehaviour
                 rtBox.anchorMax = new Vector2(0.5f, 0.5f);
                 rtBox.pivot = new Vector2(0.5f, 0.5f);
 
-                // Делаем центр ПОЛНОСТЬЮ прозрачным
                 Image mainImg = boxObj.GetComponent<Image>();
                 mainImg.color = Color.clear;
 
-                // Создаем 4 линии (Top, Bottom, Left, Right) внутри рамки
                 CreateUiLine(boxObj.transform, "Top", new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -2));
                 CreateUiLine(boxObj.transform, "Bottom", new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 2));
                 CreateUiLine(boxObj.transform, "Left", new Vector2(0, 0), new Vector2(0, 1), new Vector2(2, 0));
@@ -111,10 +108,6 @@ public class EdgeVisionCamera : MonoBehaviour
                 boxObj.SetActive(false);
                 boxPool.Add(rtBox);
             }
-        }
-        else
-        {
-            Debug.LogError($"[Ошибка] На объекте {gameObject.name} не указан Target Canvas!");
         }
 
         if (yoloModelAsset != null)
@@ -125,7 +118,6 @@ public class EdgeVisionCamera : MonoBehaviour
         }
     }
 
-    // Вспомогательный метод для динамического создания тонких UI-линий рамки
     void CreateUiLine(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 sizeOffset)
     {
         GameObject line = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -135,76 +127,143 @@ public class EdgeVisionCamera : MonoBehaviour
         rt.anchorMin = anchorMin;
         rt.anchorMax = anchorMax;
 
-        // Задаем толщину рамки (2 пикселя)
-        if (sizeOffset.x == 2 || sizeOffset.x == -2) // Вертикальные линии
+        if (sizeOffset.x == 2 || sizeOffset.x == -2)
         {
             rt.pivot = new Vector2(sizeOffset.x > 0 ? 0f : 1f, 0.5f);
             rt.sizeDelta = new Vector2(2f, 0f);
         }
-        else // Горизонтальные линии
+        else
         {
             rt.pivot = new Vector2(0.5f, sizeOffset.y > 0 ? 0f : 1f);
             rt.sizeDelta = new Vector2(0f, 2f);
         }
 
         Image img = line.GetComponent<Image>();
-        img.color = Color.green; // Цвет рамки машинки
+        img.color = Color.green;
     }
 
     void ParseYoloOutputs(Tensor<float> output)
     {
-        detectedBoxes.Clear();
+        List<BoundingBox> candidates = new List<BoundingBox>();
         if (output == null) return;
 
+        // 1. Принудительно дожидаемся окончания расчетов на GPU
         output.CompleteAllPendingOperations();
-        Tensor<float> cpuOutput = output.ReadbackAndClone() as Tensor<float>;
-        int numAnchors = cpuOutput.shape[2];
 
-        for (int i = 0; i < numAnchors; i++)
+        // 2. Используем `using` для клона. Память гарантированно очистится, жор RAM прекратится!
+        using (Tensor<float> cpuOutput = output.ReadbackAndClone() as Tensor<float>)
         {
-            float maxScore = 0;
+            // Автоматически определяем, где у нас каналы (84), а где анкоры (8400)
+            int numAnchors = (cpuOutput.shape[2] > cpuOutput.shape[1]) ? cpuOutput.shape[2] : cpuOutput.shape[1];
+            bool isTransposed = cpuOutput.shape[1] == numAnchors;
 
-            foreach (int classId in vehicleClassIds)
+            for (int i = 0; i < numAnchors; i++)
             {
-                float score = cpuOutput[0, 4 + classId, i];
-                if (score > maxScore) maxScore = score;
-            }
-
-            if (maxScore > confidenceThreshold)
-            {
-                float xCenter = cpuOutput[0, 0, i];
-                float yCenter = cpuOutput[0, 1, i];
-                float width = cpuOutput[0, 2, i];
-                float height = cpuOutput[0, 3, i];
-
-                if (xCenter <= 1.0f && width <= 1.0f)
+                float maxScore = 0;
+                foreach (int classId in vehicleClassIds)
                 {
-                    xCenter *= 640f; yCenter *= 640f; width *= 640f; height *= 640f;
+                    // Если модель транспонирована, меняем индексы местами автоматически
+                    float score = isTransposed ? cpuOutput[0, i, 4 + classId] : cpuOutput[0, 4 + classId, i];
+                    if (score > maxScore) maxScore = score;
                 }
 
-                // Переводим в нормализованный вид (0..1)
-                float normX = xCenter / 640f;
-                float normY = yCenter / 640f;
-                float normW = width / 640f;
-                float normH = height / 640f;
-
-                // В YOLO 0 - это верх экрана. Инвертируем Y для координатной сетки Unity UI
-                Vector2 centerPointNormalizedUnity = new Vector2(normX, 1f - normY);
-
-                if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
+                if (maxScore > confidenceThreshold)
                 {
-                    detectedBoxes.Add(new BoundingBox
+                    // Извлекаем координаты с учетом структуры модели
+                    float rawX = isTransposed ? cpuOutput[0, i, 0] : cpuOutput[0, 0, i];
+                    float rawY = isTransposed ? cpuOutput[0, i, 1] : cpuOutput[0, 1, i];
+                    float rawW = isTransposed ? cpuOutput[0, i, 2] : cpuOutput[0, 2, i];
+                    float rawH = isTransposed ? cpuOutput[0, i, 3] : cpuOutput[0, 3, i];
+
+                    // Переводим в нормализованные 0..1
+                    float normX = (rawX > 1.0f) ? rawX / 640f : rawX;
+                    float normY = (rawY > 1.0f) ? rawY / 640f : rawY;
+                    float normW = (rawW > 1.0f) ? rawW / 640f : rawW;
+                    float normH = (rawH > 1.0f) ? rawH / 640f : rawH;
+
+                    normX = Mathf.Clamp01(normX);
+                    normY = Mathf.Clamp01(normY);
+                    normW = Mathf.Clamp01(normW);
+                    normH = Mathf.Clamp01(normH);
+
+                    float unityY = 1f - normY;
+                    Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
+
+                    if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
                     {
-                        xCenter = normX,
-                        yCenter = 1f - normY,
-                        width = normW,
-                        height = normH,
-                        confidence = maxScore
-                    });
+                        candidates.Add(new BoundingBox
+                        {
+                            xCenter = normX,
+                            yCenter = unityY,
+                            width = normW,
+                            height = normH,
+                            confidence = maxScore
+                        });
+                    }
+                }
+            }
+        } // Здесь cpuOutput уничтожается автоматически, предотвращая утечку 4 ГБ!
+
+        // Применяем NMS фильтрацию к очищенным данным
+        detectedBoxes = ApplyNMS(candidates, iouThreshold);
+    }
+
+    // РЕАЛИЗАЦИЯ АЛГОРИТМА NON-MAXIMUM SUPPRESSION (NMS)
+    List<BoundingBox> ApplyNMS(List<BoundingBox> boxes, float iouThresh)
+    {
+        // Сортируем рамки по убыванию уверенности нейросети
+        boxes.Sort((a, b) => b.confidence.CompareTo(a.confidence));
+
+        List<BoundingBox> result = new List<BoundingBox>();
+        bool[] suppressed = new bool[boxes.Count];
+
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            if (suppressed[i]) continue;
+
+            BoundingBox baseBox = boxes[i];
+            result.Add(baseBox);
+
+            for (int j = i + 1; j < boxes.Count; j++)
+            {
+                if (suppressed[j]) continue;
+
+                // Если рамка сильно перекрывает текущую базовую — удаляем её
+                if (CalculateIoU(baseBox, boxes[j]) > iouThresh)
+                {
+                    suppressed[j] = true;
                 }
             }
         }
-        cpuOutput?.Dispose();
+
+        return result;
+    }
+
+    // Расчет коэффициента пересечения двух прямоугольников (Intersection over Union)
+    float CalculateIoU(BoundingBox boxA, BoundingBox boxB)
+    {
+        float x1A = boxA.xCenter - boxA.width / 2f;
+        float y1A = boxA.yCenter - boxA.height / 2f;
+        float x2A = boxA.xCenter + boxA.width / 2f;
+        float y2A = boxA.yCenter + boxA.height / 2f;
+
+        float x1B = boxB.xCenter - boxB.width / 2f;
+        float y1B = boxB.yCenter - boxB.height / 2f;
+        float x2B = boxB.xCenter + boxB.width / 2f;
+        float y2B = boxB.yCenter + boxB.height / 2f;
+
+        float xOverlap = Mathf.Max(0, Mathf.Min(x2A, x2B) - Mathf.Max(x1A, x1B));
+        float yOverlap = Mathf.Max(0, Mathf.Min(y2A, y2B) - Mathf.Max(y1A, y1B));
+
+        float intersectionArea = xOverlap * yOverlap;
+
+        float areaA = boxA.width * boxA.height;
+        float areaB = boxB.width * boxB.height;
+
+        float unionArea = areaA + areaB - intersectionArea;
+
+        if (unionArea <= 0) return 0;
+        return intersectionArea / unionArea;
     }
 
     void UpdateBoxVisuals()
@@ -220,7 +279,6 @@ public class EdgeVisionCamera : MonoBehaviour
                 BoundingBox box = detectedBoxes[i];
                 RectTransform rtBox = boxPool[i];
 
-                // Переводим из нормализованных координат (0..1) в локальное пространство Canvas (относительно центра)
                 float localX = (box.xCenter - 0.5f) * canvasSize.x;
                 float localY = (box.yCenter - 0.5f) * canvasSize.y;
                 float pixelW = box.width * canvasSize.x;
@@ -229,12 +287,10 @@ public class EdgeVisionCamera : MonoBehaviour
                 rtBox.anchoredPosition = new Vector2(localX, localY);
                 rtBox.sizeDelta = new Vector2(pixelW, pixelH);
 
-                // Принудительно включаем только те, под которые есть машины
                 if (!rtBox.gameObject.activeSelf) rtBox.gameObject.SetActive(true);
             }
             else
             {
-                // Все остальные избыточные боксы ГАРАНТИРОВАННО выключаем
                 if (boxPool[i].gameObject.activeSelf) boxPool[i].gameObject.SetActive(false);
             }
         }
@@ -272,34 +328,26 @@ public class EdgeVisionCamera : MonoBehaviour
     {
         while (true)
         {
-            // Ждем заданный интервал перед следующей детекцией
             yield return new WaitForSeconds(detectionInterval);
-            // Ждем конца кадра, чтобы RenderTexture успел корректно захватить изображение
             yield return new WaitForEndOfFrame();
 
             if (targetCamera == null || rt == null || engine == null) continue;
 
-            // Направляем рендер камеры в нашу текстуру 640x640
             targetCamera.targetTexture = rt;
             targetCamera.Render();
             targetCamera.targetTexture = null;
 
-            // Передаем текстуру в ИИ-движок и запускаем инференс
             TextureConverter.ToTensor(rt, inputTensor);
             engine.Schedule(inputTensor);
 
-            // Считываем результаты
             Tensor<float> outputTensor = engine.PeekOutput() as Tensor<float>;
             ParseYoloOutputs(outputTensor);
 
-            // Считаем загруженность зоны
             int detectedCars = detectedBoxes.Count;
             float congestionIndex = Mathf.Clamp01((float)detectedCars / maxZoneCapacity);
 
-            // Обновляем наши зеленые UI-прямоугольники на Canvas
             UpdateBoxVisuals();
 
-            // Отправляем данные аналитики на бэкенд FastAPI
             StartCoroutine(SendAnalyticsToGateway(gameObject.name, detectedCars, congestionIndex));
         }
     }
@@ -312,16 +360,12 @@ public class EdgeVisionCamera : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    // Этот метод вызывается автоматически при изменении значений в инспекторе
     private void OnValidate()
     {
-        // Проверяем, запущена ли игра, инициализированы ли камера и LineRenderer
         if (Application.isPlaying && targetCamera != null && roiLineRenderer != null && roiPolygon != null)
         {
-            // Обновляем количество точек, если ты решил добавить или удалить вершины
             roiLineRenderer.positionCount = roiPolygon.Length;
 
-            // Пересчитываем координаты точек на лету
             for (int i = 0; i < roiPolygon.Length; i++)
             {
                 Vector3 viewportPoint = new Vector3(roiPolygon[i].x, roiPolygon[i].y, 1.0f);
