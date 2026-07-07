@@ -1,91 +1,50 @@
-import torch
-from fastapi import FastAPI, File, UploadFile
 import uvicorn
-import cv2
-import numpy as np
-from ultralytics import YOLO
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel, Field
 
-app = FastAPI(title="Smart Crossroads - Production Ready")
-
-# Проверяем видеокарту
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print(f"[SYSTEM] ИИ запущен на: {device.upper()}")
-
-# Загружаем модель
-model = YOLO('yolov8m.pt').to(device)
-
-# Флаг занятости процессора (чтобы кадры не накладывались друг на друга)
-is_processing = False
-
-# Твои скорректированные координаты зоны из Unity
-roi_polygon = np.array([
-    [450, 100],  # Верхняя левая
-    [530, 100],
-    [860, 580],# правый низ
-    [200, 580]  # левый низ
-], np.int32)
-
-# Создаем ОДНО фиксированное окно для стрима при старте сервера
-cv2.namedWindow("Unity Live CCTV Stream", cv2.WINDOW_NORMAL)
+app = FastAPI(
+    title="Smart Crossroads Gateway",
+    description="Шлюз для сбора аналитики загруженности дорог с камер ИИ"
+)
 
 
-@app.post("/api/v1/upload-frame")
-async def upload_frame(image: UploadFile = File(...)):
-    global is_processing
+# Модель данных, строго соответствующая отправляемому JSON из Unity
+class CongestionData(BaseModel):
+    camera_id: str = Field(..., description="Уникальный идентификатор или имя камеры из Unity")
+    car_count: int = Field(..., ge=0, description="Количество зафиксированных автомобилей в зоне")
+    congestion_index: float = Field(..., ge=0.0, le=1.0, description="Индекс затора от 0.0 (пусто) до 1.0 (пробка)")
 
-    # ЗАЩИТА: Если ИИ ещё считает прошлый кадр — этот мы просто дропаем,
-    # чтобы не вешать ноут и не копить лаги
-    if is_processing:
-        return {"status": "skipped", "reason": "server_busy"}
 
-    is_processing = True
-
+# Эндпоинт, на который Unity шлет POST-запросы
+@app.post(
+    "/api/v1/update-congestion",
+    status_code=status.HTTP_200_OK,
+    summary="Обновить данные о заторе с камеры"
+)
+async def update_congestion(data: CongestionData):
     try:
-        contents = await image.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # Здесь будет логика обработки данных
+        # Например: сохранение в БД (SQLite/PostgreSQL) или отправка диспетчеру
 
-        if img is None:
-            is_processing = False
-            return {"status": "error", "message": "bad image"}
+        print(
+            f"[Камера: {data.camera_id}] Машин в зоне: {data.car_count} | Индекс затора: {data.congestion_index * 100:.1f}%")
 
-        # СТРОГИЙ ФИЛЬТР: classes=[2] оставляет ТОЛЬКО машины (car).
-        # Никаких самолетов и грузовиков на горизонте больше не будет.
-        results = model(img, classes=[2, 3], conf=0.3, verbose=False)
+        # Возвращаем статус успешной обработки
+        return {
+            "status": "success",
+            "message": f"Данные с камеры '{data.camera_id}' успешно обработаны."
+        }
 
-        car_count = 0
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Внутренняя ошибка сервера при обработке данных: {str(e)}"
+        )
 
-                # Точно такой же расчет центра, как в детекторе!
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-
-                inside = cv2.pointPolygonTest(roi_polygon, (cx, cy), False) >= 0
-                if inside:
-                    car_count += 1
-                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.circle(img, (cx, cy), 5, (0, 255, 0), -1)
-                else:
-                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 1)
-                    cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
-
-        # Отрисовка интерфейса поверх кадра
-        cv2.polylines(img, [roi_polygon], True, (255, 255, 0), 2)
-        cv2.putText(img, f"In Queue: {car_count}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-
-        # Безопасное обновление окна
-        cv2.imshow("Unity Live CCTV Stream", img)
-        cv2.waitKey(1)  # Короткий такт для перерисовки графики Windows
-
-    finally:
-        # Освобождаем сервер для следующего кадра
-        is_processing = False
-
-    return {"status": "success", "detected_cars": car_count}
-
+@app.get("/")
+async def root():
+    return {"status": "gateway_online", "info": "Перейди на http://127.0.0.1:8050/docs для просмотра API"}
 
 if __name__ == "__main__":
-    # Запускаем на порту 8050
-    uvicorn.run(app, host="127.0.0.1", port=8050)
+    # Запускаем сервер на порту 8050, который прописан в скрипте EdgeVisionCamera.cs
+    uvicorn.run("main:app", host="127.0.0.1", port=8050, reload=True)
