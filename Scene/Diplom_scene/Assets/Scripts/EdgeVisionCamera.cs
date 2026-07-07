@@ -42,7 +42,7 @@ public class EdgeVisionCamera : MonoBehaviour
     }
 
     private List<BoundingBox> detectedBoxes = new List<BoundingBox>();
-    private HashSet<int> vehicleClassIds = new HashSet<int> { 2, 3, 5, 7 };
+    private HashSet<int> vehicleClassIds = new HashSet<int> {0, 1}; //для yolama8m  2, 3, 5, 7 
 
     [Header("Зона детекции (ROI) для этой камеры")]
     public Vector2[] roiPolygon = new Vector2[]
@@ -153,6 +153,7 @@ public class EdgeVisionCamera : MonoBehaviour
         // 2. Используем `using` для клона. Память гарантированно очистится, жор RAM прекратится!
         using (Tensor<float> cpuOutput = output.ReadbackAndClone() as Tensor<float>)
         {
+            Debug.Log($"[AI DIAGNOSIS] Итоговая форма тензора модели: {cpuOutput.shape}");
             // Автоматически определяем, где у нас каналы (84), а где анкоры (8400)
             int numAnchors = (cpuOutput.shape[2] > cpuOutput.shape[1]) ? cpuOutput.shape[2] : cpuOutput.shape[1];
             bool isTransposed = cpuOutput.shape[1] == numAnchors;
@@ -169,23 +170,33 @@ public class EdgeVisionCamera : MonoBehaviour
 
                 if (maxScore > confidenceThreshold)
                 {
-                    // Извлекаем координаты с учетом структуры модели
+                    // 1. Извлекаем сырые данные
                     float rawX = isTransposed ? cpuOutput[0, i, 0] : cpuOutput[0, 0, i];
                     float rawY = isTransposed ? cpuOutput[0, i, 1] : cpuOutput[0, 1, i];
                     float rawW = isTransposed ? cpuOutput[0, i, 2] : cpuOutput[0, 2, i];
                     float rawH = isTransposed ? cpuOutput[0, i, 3] : cpuOutput[0, 3, i];
 
-                    // Переводим в нормализованные 0..1
-                    float normX = (rawX > 1.0f) ? rawX / 640f : rawX;
-                    float normY = (rawY > 1.0f) ? rawY / 640f : rawY;
-                    float normW = (rawW > 1.0f) ? rawW / 640f : rawW;
-                    float normH = (rawH > 1.0f) ? rawH / 640f : rawH;
+                    // 2. ЖЕСТКО приводим к пикселям 640x640. 
+                    // Если модель выдала нормализованные данные (меньше 1), умножаем на 640.
+                    // Если модель выдала пиксели (больше 1), оставляем как есть.
+                    float pixelX = (rawX <= 1.0f) ? rawX * 640f : rawX;
+                    float pixelY = (rawY <= 1.0f) ? rawY * 640f : rawY;
+                    float pixelW = (rawW <= 1.0f) ? rawW * 640f : rawW;
+                    float pixelH = (rawH <= 1.0f) ? rawH * 640f : rawH;
 
+                    // 3. Теперь переводим в нормализованные координаты 0..1 для отрисовки в Unity UI Canvas
+                    float normX = pixelX / 640f;
+                    float normY = pixelY / 640f;
+                    float normW = pixelW / 640f;
+                    float normH = pixelH / 640f;
+
+                    // Ограничиваем рамки краями экрана
                     normX = Mathf.Clamp01(normX);
                     normY = Mathf.Clamp01(normY);
                     normW = Mathf.Clamp01(normW);
                     normH = Mathf.Clamp01(normH);
 
+                    // Разворачиваем Y для Canvas
                     float unityY = 1f - normY;
                     Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
 
