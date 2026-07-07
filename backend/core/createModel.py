@@ -4,13 +4,13 @@ import os
 
 rf = Roboflow(api_key="8ruTrXQopT37OBoi3cEU")
 project = rf.workspace("kugas-workspace").project("low_poly-cars")
-dataset = project.version(1).download("yolov8")
+dataset = project.version(2).download("yolov8")
 
 # Автоматически находим путь к скачанному data.yaml
 yaml_path = os.path.join(dataset.location, "data.yaml")
 
 # 1. Загружаем базовую модель
-model = YOLO('yolov8m.pt')
+model = YOLO('yolov8n.pt')
 
 # 2. Дообучаем модель (теперь путь подставится сам!)
 # Изменяем параметры тренировки, чтобы не перегружать оперативку
@@ -25,4 +25,4 @@ model.train(
 
 # 3. Экспортируем обновленную модель в ONNX для Unity
 model.export(format='onnx', imgsz=640)
-print("[SUCCESS] Модель сконвертирована! Ищи файл 'yolov8m.onnx' в папке.")
+print("[SUCCESS] Модель сконвертирована! Ищи файл 'yolov8n.onnx' в папке.")
