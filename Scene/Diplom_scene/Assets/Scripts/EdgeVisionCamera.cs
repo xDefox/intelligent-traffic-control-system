@@ -25,7 +25,7 @@ public class EdgeVisionCamera : MonoBehaviour
     }
 
     private List<BoundingBox> detectedBoxes = new List<BoundingBox>();
-    private HashSet<int> vehicleClassIds = new HashSet<int> { 0, 1 }; // 0, 1 — например, легковые и грузовые
+    private HashSet<int> vehicleClassIds = new HashSet<int> {0, 1}; //для yolama8m  2, 3, 5, 7 
 
     [Header("Зона детекции (ROI) для этой камеры")]
     public Vector2[] roiPolygon = new Vector2[]
@@ -171,6 +171,7 @@ public class EdgeVisionCamera : MonoBehaviour
                     normW = Mathf.Clamp01(normW);
                     normH = Mathf.Clamp01(normH);
 
+                    // Разворачиваем Y для Canvas
                     float unityY = 1f - normY;
                     Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
 
