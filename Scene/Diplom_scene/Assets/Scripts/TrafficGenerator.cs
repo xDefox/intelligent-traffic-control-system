@@ -44,45 +44,18 @@ public class TrafficGenerator : MonoBehaviour
 
         RouteData selectedRoute = allRoutes[Random.Range(0, allRoutes.Count)];
 
-        if (selectedRoute.routeParent == null || selectedRoute.spawnPoint == null) return;
-
-        // --- НАЧАЛО ПРОВЕРКИ ЗАНЯТОСТИ ТОЧКИ СПАВНА ---
-        // Получаем маску слоя Traffic
-        int trafficMask = LayerMask.GetMask("Traffic");
-
-        // Полуразмеры коробки проверки. Коробка будет размером 2.4м в ширину, 2м в высоту и 4м в длину.
-        // Этого с запасом хватит, чтобы заметить бампер или кузов предыдущей машины.
-        Vector3 boxHalfExtents = new Vector3(1.2f, 1f, 2f);
-
-        // Проверяем физическое пространство вокруг выбранной точки спавна
-        if (Physics.CheckBox(selectedRoute.spawnPoint.position, boxHalfExtents, selectedRoute.spawnPoint.rotation, trafficMask))
-        {
-            // Если точка занята другой машиной, просто прерываем метод.
-            // Машина не заспавнится, пока точка не освободится.
-            Debug.Log($"[TrafficGenerator] Спавн на маршруте '{selectedRoute.routeName}' отменен: точка занята.");
-            return;
-        }
-        // --- КОНЕЦ ПРОВЕРКИ ЗАНЯТОСТИ ---
+        // Теперь нам нужен стартовый RoadSegment вместо routeParent
+        RoadSegment startSegment = selectedRoute.routeParent.GetComponent<RoadSegment>();
+        if (startSegment == null || selectedRoute.spawnPoint == null) return;
 
         GameObject randomCarPrefab = carPrefabs[Random.Range(0, carPrefabs.Count)];
-
-        // Собираем вейпоинты
-        List<Transform> extractedWaypoints = new List<Transform>();
-        foreach (Transform child in selectedRoute.routeParent)
-        {
-            extractedWaypoints.Add(child);
-        }
-
-        if (extractedWaypoints.Count == 0) return;
-
-        // Спавним машину (теперь это гарантированно безопасно)
         GameObject car = Instantiate(randomCarPrefab, selectedRoute.spawnPoint.position, selectedRoute.spawnPoint.rotation);
 
         WaypointNavigator navigator = car.GetComponent<WaypointNavigator>();
         if (navigator != null)
         {
-            // Передаем вейпоинты, детектор и индекс стоп-точки
-            navigator.SetupRoute(extractedWaypoints, selectedRoute.oncomingDetector, selectedRoute.stopWaypointIndex);
+            // Инициализируем через новый метод и передаем true для первичного LookAt
+            navigator.SetupSegment(startSegment, true);
         }
     }
 

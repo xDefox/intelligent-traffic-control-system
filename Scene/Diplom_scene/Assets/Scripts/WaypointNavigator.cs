@@ -14,6 +14,7 @@ public class WaypointNavigator : MonoBehaviour
     [Tooltip("Угол поворота (в градусах), при котором луч полностью гаснет")]
     public float turnAngleThreshold = 15f;
 
+    private RoadSegment currentSegment;
     private int currentWaypointIndex = 0;
     private float originalSpeed;
 
@@ -24,36 +25,48 @@ public class WaypointNavigator : MonoBehaviour
 
     // Встречный поток
     private OncomingTrafficDetector oncomingDetector;
-    private int stopWaypointIndex = 0;
+    private int stopWaypointIndex = -1;
 
     void Start()
     {
         originalSpeed = speed;
     }
 
-    public void SetupRoute(List<Transform> routePoints, OncomingTrafficDetector detector, int stopIndex)
+    public void SetupSegment(RoadSegment segment, bool isInitialSpawn = false)
     {
-        waypoints = new List<Transform>(routePoints);
-        oncomingDetector = detector;
-        stopWaypointIndex = stopIndex;
-        currentWaypointIndex = 0;
+        // Исправленная проверка: сегмент не null, список точек существует и не пуст
+        if (segment == null || segment.localWaypoints == null || segment.localWaypoints.Count == 0) return;
 
-        if (waypoints.Count > 0)
+        currentSegment = segment;
+        waypoints = new List<Transform>(segment.localWaypoints);
+        oncomingDetector = segment.oncomingDetector;
+        stopWaypointIndex = segment.stopWaypointIndex;
+        currentWaypointIndex = 0;
+        isOnIntersection = false;
+
+        if (isInitialSpawn && waypoints.Count > 0 && waypoints[0] != null)
         {
             Vector3 lookTarget = new Vector3(waypoints[0].position.x, transform.position.y, waypoints[0].position.z);
             transform.LookAt(lookTarget);
         }
     }
 
+    private LayerMask CreateLayerMask()
+    {
+        return LayerMask.GetMask("Traffic");
+    }
+
     void Update()
     {
-        if (waypoints == null || waypoints.Count == 0) return;
+        if (waypoints == null || waypoints.Count == 0 || currentWaypointIndex >= waypoints.Count) return;
 
         string currentReason = "Едет";
         Transform targetWaypoint = waypoints[currentWaypointIndex];
 
+        if (targetWaypoint == null) return;
+
         // Базовая рабочая дистанция
-        float actualMaxDistance = 2.2f;
+        float actualMaxDistance = maxCheckDistance;
 
         // ЕСЛИ МЫ НА ПЕРЕКРЕСТКЕ: укорачиваем луч до минимума, чтобы не бить в бока
         if (isOnIntersection)
@@ -75,7 +88,7 @@ public class WaypointNavigator : MonoBehaviour
         if (angleToTarget < turnAngleThreshold)
         {
             RaycastHit hit;
-            int layerMask = LayerMask.GetMask("Traffic");
+            int layerMask = CreateLayerMask();
 
             Debug.DrawLine(rayStart, rayEnd, Color.red);
 
@@ -141,15 +154,27 @@ public class WaypointNavigator : MonoBehaviour
         {
             currentWaypointIndex++;
 
-            // Как только мы доехали до очередной точки — мы гарантированно 
-            // либо проехали перекресток, либо выровнялись на новую прямую.
-            // Возвращаем штатную дистанцию луча обратно!
-            isOnIntersection = false;
-
             if (currentWaypointIndex >= waypoints.Count)
             {
-                Destroy(gameObject);
+                SwitchToNextSegment();
             }
+        }
+    }
+
+    private void SwitchToNextSegment()
+    {
+        if (currentSegment != null && currentSegment.nextPossibleSegments != null && currentSegment.nextPossibleSegments.Count > 0)
+        {
+            // Случайный выбор следующего направления на развилке
+            int randomIndex = Random.Range(0, currentSegment.nextPossibleSegments.Count);
+            RoadSegment nextSegment = currentSegment.nextPossibleSegments[randomIndex];
+
+            SetupSegment(nextSegment, false);
+        }
+        else
+        {
+            // Если дорожная сеть закончилась
+            Destroy(gameObject);
         }
     }
 
@@ -157,7 +182,6 @@ public class WaypointNavigator : MonoBehaviour
     {
         if (other.CompareTag("StopTrigger"))
         {
-            // Пока мы стоим или тремся в триггере стоп-линии — мы еще НЕ на перекрестке
             isOnIntersection = false;
 
             TrafficLightViewer trafficLight = other.GetComponentInParent<TrafficLightViewer>();
@@ -181,8 +205,6 @@ public class WaypointNavigator : MonoBehaviour
         if (other.CompareTag("StopTrigger"))
         {
             isStoppedByLight = false;
-
-            // Выехали из триггера стоп-линии -> значит выехали НА перекресток!
             isOnIntersection = true;
         }
     }
