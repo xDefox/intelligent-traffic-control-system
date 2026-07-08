@@ -15,26 +15,48 @@ traffic_brain = AdaptiveTrafficBrain()
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        # Храним активные сокеты: {"camera_1": websocket, "traffic_light_controller": websocket}
+        self.active_connections: dict[str, WebSocket] = {}
+        # Храним текущее состояние очередей на перекрестке
+        self.traffic_state = {
+            "north_queue": 0,
+            "south_queue": 0,
+            "east_queue": 0,
+            "west_queue": 0
+        }
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, client_id: str, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[client_id] = websocket
+        print(f"[CONNECT] Подключился клиент: {client_id}")
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
+            print(f"[DISCONNECT] Отключился клиент: {client_id}")
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+    async def send_command(self, client_id: str, message: dict):
+        if client_id in self.active_connections:
+            await self.active_connections[client_id].send_text(json.dumps(message))
+
+    def update_queue(self, camera_id: str, car_count: int):
+        """Привязываем ID камеры к направлению графа"""
+        if "north" in camera_id.lower():
+            self.traffic_state["north_queue"] = car_count
+        elif "south" in camera_id.lower():
+            self.traffic_state["south_queue"] = car_count
+        elif "east" in camera_id.lower():
+            self.traffic_state["east_queue"] = car_count
+        elif "west" in camera_id.lower():
+            self.traffic_state["west_queue"] = car_count
 
 
-manager = ConnectionManager()
+manager = IntersectionManager()
 
 
 @app.get("/")
 async def root():
-    return {"status": "running", "target_infrastructure": "Belarus_ITS"}
+    return {"status": "fog_node_online", "infrastructure": "Belarus_ITS"}
 
 
 @app.post("/api/v1/telemetry")
@@ -68,5 +90,4 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             print(f"[UNITY feedback]: {data}")
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("[DISCONNECT] Unity-клиент отключился.")
+        manager.disconnect(client_id)
