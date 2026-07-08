@@ -1,31 +1,18 @@
 # backend/main.py
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-import asyncio
 import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
 
-app = FastAPI(title="Smart Crossroads UTC-UX Prototype", version="0.1.0")
+# Исправленные пути: так как корень исполнения — папка backend, импортируем напрямую
+from backend.models.traffic import IntersectionUpdateDTO
+from backend.services.traffic_brain import AdaptiveTrafficBrain
 
+app = FastAPI(title="Smart Crossroads UTC-UX Prototype", version="0.3.0")
 
-# Схема данных, которую нам будет присылать CV-модуль
-class TrafficState(BaseModel):
-    intersection_id: int
-    north_queue: int
-    south_queue: int
-    east_queue: int
-    west_queue: int
-    emergency_vehicle_detected: bool = False
-
-
-# Глобальное состояние нашего светофора (для демонстрации)
-current_traffic_light_state = {
-    "current_phase": "NORTH_SOUTH_GREEN",  # Текущая активная фаза
-    "phase_timer": 30,  # Сколько секунд осталось
-    "system_status": "ONLINE"
-}
+# Инжектим наш сервис управления
+traffic_brain = AdaptiveTrafficBrain()
 
 
-# Хранилище активных WebSocket соединений (например, для Unity-клиента)
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -50,33 +37,34 @@ async def root():
     return {"status": "running", "target_infrastructure": "Belarus_ITS"}
 
 
-# 1. Эндпоинт для приема телеметрии от CV / Unity
 @app.post("/api/v1/telemetry")
-async def receive_telemetry(state: TrafficState):
-    print(f"\n[TELEMETRY] Перекресток {state.intersection_id}:")
-    print(
-        f"   Очереди -> С: {state.north_queue} | Ю: {state.south_queue} | В: {state.east_queue} | З: {state.west_queue}")
+async def receive_telemetry(update: IntersectionUpdateDTO):
+    # Вызываем распределенный метод обработки данных (DIP)
+    target_phase = traffic_brain.process_telemetry(update)
 
-    # Триггер приоритетного проезда (Пункт 07:37 стратегии Дубая)
-    if state.emergency_vehicle_detected:
-        print("[🚨 CRITICAL] Обнаружен спецтранспорт! Инициирован зелёный коридор.")
-        current_traffic_light_state["current_phase"] = "EMERGENCY_OVERRIDE"
-        current_traffic_light_state["phase_timer"] = 15
-        # Тут будет мгновенная отправка команды в Unity через WebSocket
-        await manager.broadcast(json.dumps({"command": "SET_EMERGENCY_PHASE"}))
-        return {"status": "override_activated"}
+    os.system('cls' if os.name == 'nt' else 'clear')
 
-    # Здесь в будущем будет вызов traffic_brain для адаптивного пересчета
-    return {"status": "processed", "current_phase": current_traffic_light_state["current_phase"]}
+    # Красивый вывод логов в консоль Uvicorn
+    print(f"\n[TELEMETRY] Перекресток: {update.intersection_id} | Источник: {update.camera_id}")
+    print(f"   Обработано полос: {len(update.lanes)}")
 
+    # Пополосный вывод (как было раньше, но теперь динамически)
+    for lane in update.lanes:
+        print(f"     📍 {lane.lane_id}: {lane.car_count} авт. (скорость: {lane.avg_speed} км/ч)")
 
-# 2. WebSocket для связи с Unity (управление светофорами в реальном времени)
+    print(f"   🤖 [ИИ Решение]: Выставлена фаза -> {target_phase}")
+
+    # Возвращаем Unity команду управления внутри HTTP-ответа
+    return {
+        "status": "processed",
+        "current_phase": target_phase
+    }
+
 @app.websocket("/ws/traffic-control")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Ждем данные от Unity (например, подтверждение переключения фазы)
             data = await websocket.receive_text()
             print(f"[UNITY feedback]: {data}")
     except WebSocketDisconnect:

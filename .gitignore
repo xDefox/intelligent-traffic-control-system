@@ -28,3 +28,13 @@ Scene/Diplom_scene/UserSettings/
 Scene/Diplom_scene/usersettings/
 Scene/Diplom_scene/.plastic/
 
+backend/core/runs/
+*.pt
+*.onnx
+#Нейросеть
+backend/core/low_poly-cars-1
+backend/core/low_poly-cars-2
+
+
+# Другое
+dataset
