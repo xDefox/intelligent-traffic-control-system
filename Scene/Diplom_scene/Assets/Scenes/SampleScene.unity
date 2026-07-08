@@ -897,18 +897,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
-  detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
   iouThreshold: 0.4
   targetCanvas: {fileID: 1598132764}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.35, y: -0.1}
-  - {x: 0.51, y: 0.19}
-  - {x: 0.01, y: 0.7}
-  - {x: -0.09, y: 0.66}
+  - {x: 0.48, y: -0.1}
+  - {x: 0.64, y: 0.12}
+  - {x: 0.33, y: 0.79}
+  - {x: 0.26, y: 0.77}
 --- !u!1 &303915038
 GameObject:
   m_ObjectHideFlags: 0
@@ -1223,8 +1221,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: 75d08308ab5e36c4d9f0f395bbe77838, type: 3}
-  detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
   iouThreshold: 0.4
@@ -3034,6 +3030,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1141383410}
   - component: {fileID: 1141383409}
+  - component: {fileID: 1141383411}
   m_Layer: 0
   m_Name: IntersectionManager
   m_TagString: Untagged
@@ -3077,6 +3074,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1141383411
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1141383408}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27b35f0e57dad844587fa67a60598702, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntersectionVisionManager
+  intersectionId: intersection_1
+  sharedYoloModel: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
+  globalDetectionInterval: 0.2
+  northCamera: {fileID: 0}
+  southCamera: {fileID: 282847488}
+  eastCamera: {fileID: 1374376490731817806}
+  westCamera: {fileID: 1484244799026827397}
+  telemetryUrl: http://127.0.0.1:8050/api/v1/telemetry
 --- !u!1 &1151306301
 GameObject:
   m_ObjectHideFlags: 0
@@ -5558,8 +5575,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
-  detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
   iouThreshold: 0.4
@@ -5582,8 +5597,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
-  detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
   iouThreshold: 0.4
