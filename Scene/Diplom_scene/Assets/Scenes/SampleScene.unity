@@ -142,22 +142,6 @@ MonoBehaviour:
   redEmission: {r: 1, g: 0, b: 0, a: 1}
   yellowEmission: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   greenEmission: {r: 0, g: 1, b: 0, a: 1}
---- !u!114 &62657985
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 62657983}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3a432c39f472cd45ba7de299bdf935c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightController
-  redLight: {fileID: 1778301351}
-  yellowLight: {fileID: 168580276}
-  greenLight: {fileID: 482839236}
-  activeColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!4 &62657988 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4895434058859974, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
@@ -242,10 +226,7 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1449081973}
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1229961167}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
 --- !u!1 &161385475
 GameObject:
@@ -911,15 +892,16 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1835185411356551422}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: 75d08308ab5e36c4d9f0f395bbe77838, type: 3}
+  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
   detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
+  iouThreshold: 0.4
   targetCanvas: {fileID: 1598132764}
   maxVisibleBoxes: 15
   roiPolygon:
@@ -1245,6 +1227,7 @@ MonoBehaviour:
   detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
+  iouThreshold: 0.4
   targetCanvas: {fileID: 0}
   maxVisibleBoxes: 15
   roiPolygon:
@@ -1995,11 +1978,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!1 &632157655 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-  m_PrefabInstance: {fileID: 2096002406}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &653738038
 GameObject:
   m_ObjectHideFlags: 0
@@ -2218,9 +2196,6 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 708381117}
-    - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 708381120}
   m_SourcePrefab: {fileID: 100100000, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
 --- !u!1 &708381115 stripped
@@ -2233,22 +2208,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4895434058859974, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
   m_PrefabInstance: {fileID: 708381114}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &708381117
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 708381115}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3a432c39f472cd45ba7de299bdf935c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightController
-  redLight: {fileID: 1151306305}
-  yellowLight: {fileID: 1263899512}
-  greenLight: {fileID: 586588488}
-  activeColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!114 &708381120
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2528,10 +2487,7 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
       insertIndex: -1
       addedObject: {fileID: 305294435}
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1171789143}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
 --- !u!1 &854717469
 GameObject:
@@ -3102,6 +3058,7 @@ MonoBehaviour:
   - {fileID: 62657984}
   sideRoadLights:
   - {fileID: 708381120}
+  useAutonomousCycle: 1
   mainGreenDuration: 12
   yellowDuration: 2
   sideGreenDuration: 8
@@ -3304,73 +3261,18 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 62657985}
-    - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 62657984}
   m_SourcePrefab: {fileID: 100100000, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
---- !u!1 &1171789141 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-  m_PrefabInstance: {fileID: 795649992}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1171789142 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
   m_PrefabInstance: {fileID: 795649992}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1171789143
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1171789141}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f7cdf07b5660b6644bb89a3c4ceeef64, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightTimer
-  redLight: {fileID: 609850910}
-  yellowLight: {fileID: 653738042}
-  greenLight: {fileID: 245231540}
-  redDuration: 10
-  yellowDuration: 2
-  greenDuration: 10
-  redEmission: {r: 1, g: 0, b: 0, a: 1}
-  yellowEmission: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  greenEmission: {r: 0, g: 1, b: 0, a: 1}
---- !u!1 &1229961165 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-  m_PrefabInstance: {fileID: 127920118}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &1229961166 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
   m_PrefabInstance: {fileID: 127920118}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1229961167
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1229961165}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f7cdf07b5660b6644bb89a3c4ceeef64, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightTimer
-  redLight: {fileID: 1778301351}
-  yellowLight: {fileID: 168580276}
-  greenLight: {fileID: 482839236}
-  redDuration: 10
-  yellowDuration: 2
-  greenDuration: 10
-  redEmission: {r: 1, g: 0, b: 0, a: 1}
-  yellowEmission: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  greenEmission: {r: 0, g: 1, b: 0, a: 1}
 --- !u!1 &1234844626
 GameObject:
   m_ObjectHideFlags: 0
@@ -4479,22 +4381,6 @@ MonoBehaviour:
   redEmission: {r: 1, g: 0, b: 0, a: 1}
   yellowEmission: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   greenEmission: {r: 0, g: 1, b: 0, a: 1}
---- !u!114 &1725734414
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1725734412}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3a432c39f472cd45ba7de299bdf935c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightController
-  redLight: {fileID: 609850910}
-  yellowLight: {fileID: 653738042}
-  greenLight: {fileID: 245231540}
-  activeColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!4 &1725734417 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4895434058859974, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
@@ -5463,9 +5349,6 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1725734414}
-    - targetCorrespondingSourceObject: {fileID: 1377174823369542, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 1725734413}
   m_SourcePrefab: {fileID: 100100000, guid: d01359581b30d274798a2908a7b0b1ac, type: 3}
 --- !u!1001 &2096002406
@@ -5547,37 +5430,13 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1883080220}
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1532468895285226, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2096002410}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
 --- !u!4 &2096002407 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4549882812725322, guid: a5faf4711ef4cef489a20f0ef5c5e8f3, type: 3}
   m_PrefabInstance: {fileID: 2096002406}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &2096002410
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 632157655}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f7cdf07b5660b6644bb89a3c4ceeef64, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrafficLightTimer
-  redLight: {fileID: 1151306305}
-  yellowLight: {fileID: 1263899512}
-  greenLight: {fileID: 586588488}
-  redDuration: 10
-  yellowDuration: 2
-  greenDuration: 10
-  redEmission: {r: 1, g: 0, b: 0, a: 1}
-  yellowEmission: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  greenEmission: {r: 0, g: 1, b: 0, a: 1}
 --- !u!1 &2129732336
 GameObject:
   m_ObjectHideFlags: 0
@@ -5694,15 +5553,16 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1835185411627724539}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: 75d08308ab5e36c4d9f0f395bbe77838, type: 3}
+  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
   detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
+  iouThreshold: 0.4
   targetCanvas: {fileID: 1583307868}
   maxVisibleBoxes: 15
   roiPolygon:
@@ -5717,15 +5577,16 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2232729392458265904}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6e3fab875cadab9458bcf8360f071faa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EdgeVisionCamera
-  yoloModelAsset: {fileID: 5022602860645237092, guid: cb338a7eb7318504488bac0ea3b34e37, type: 3}
+  yoloModelAsset: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
   detectionInterval: 0.2
   maxZoneCapacity: 10
   confidenceThreshold: 0.4
+  iouThreshold: 0.4
   targetCanvas: {fileID: 1918061643}
   maxVisibleBoxes: 15
   roiPolygon:

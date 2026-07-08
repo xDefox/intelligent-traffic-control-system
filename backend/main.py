@@ -1,16 +1,19 @@
+# backend/main.py
 import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+import os
 
-app = FastAPI(
-    title="Smart Crossroads - Dubai Fog Server",
-    description="Управляющий контроллер перекрестка. Принимает данные с камер по WS и считает фазы.",
-    version="0.2.0"
-)
+# Исправленные пути: так как корень исполнения — папка backend, импортируем напрямую
+from backend.models.traffic import IntersectionUpdateDTO
+from backend.services.traffic_brain import AdaptiveTrafficBrain
+
+app = FastAPI(title="Smart Crossroads UTC-UX Prototype", version="0.3.0")
+
+# Инжектим наш сервис управления
+traffic_brain = AdaptiveTrafficBrain()
 
 
-# Глобальный менеджер WebSocket-соединений
-class IntersectionManager:
+class ConnectionManager:
     def __init__(self):
         # Храним активные сокеты: {"camera_1": websocket, "traffic_light_controller": websocket}
         self.active_connections: dict[str, WebSocket] = {}
@@ -56,34 +59,35 @@ async def root():
     return {"status": "fog_node_online", "infrastructure": "Belarus_ITS"}
 
 
-# Единый WebSocket-канал для симуляции Unity
-@app.websocket("/ws/traffic-control/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await manager.connect(client_id, websocket)
+@app.post("/api/v1/telemetry")
+async def receive_telemetry(update: IntersectionUpdateDTO):
+    # Вызываем распределенный метод обработки данных (DIP)
+    target_phase = traffic_brain.process_telemetry(update)
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+    # Красивый вывод логов в консоль Uvicorn
+    print(f"\n[TELEMETRY] Перекресток: {update.intersection_id} | Источник: {update.camera_id}")
+    print(f"   Обработано полос: {len(update.lanes)}")
+
+    # Пополосный вывод (как было раньше, но теперь динамически)
+    for lane in update.lanes:
+        print(f"     📍 {lane.lane_id}: {lane.car_count} авт. (скорость: {lane.avg_speed} км/ч)")
+
+    print(f"   🤖 [ИИ Решение]: Выставлена фаза -> {target_phase}")
+
+    # Возвращаем Unity команду управления внутри HTTP-ответа
+    return {
+        "status": "processed",
+        "current_phase": target_phase
+    }
+
+@app.websocket("/ws/traffic-control")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
     try:
         while True:
-            # Принимаем текстовый пакет от Unity (камеры или контроллера светофоров)
             data = await websocket.receive_text()
-            payload = json.loads(data)
-
-            # Если пакет пришел от камеры ИИ
-            if "camera" in client_id.lower():
-                cars = payload.get("car_count", 0)
-                congestion = payload.get("congestion_index", 0.0)
-
-                # Обновляем состояние очередей для нашего графа
-                manager.update_queue(client_id, cars)
-
-                print(f"[DATA] {client_id} -> Машин: {cars} | Затор: {congestion * 100:.1f}%")
-                print(f"       Текущие очереди на перекрестке: {manager.traffic_state}")
-
-                # Тут в будущем будет дергаться `engine.py` для пересчета таймингов
-                # И если нужно поменять фазу, отправляем команду светофору:
-                # await manager.send_command("traffic_light_controller", {"command": "SET_PHASE", "phase": "EAST_WEST"})
-
-            # Если пакет пришел от самого светофора (например, подтверждение смены фазы)
-            elif client_id == "traffic_light_controller":
-                print(f"[LIGHT FEEDBACK]: {payload}")
-
+            print(f"[UNITY feedback]: {data}")
     except WebSocketDisconnect:
         manager.disconnect(client_id)
