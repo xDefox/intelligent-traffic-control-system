@@ -4,80 +4,81 @@ using System.Collections.Generic;
 
 public class IntersectionManager : MonoBehaviour
 {
-    [Header("Светофоры Главной дороги")]
-    public List<TrafficLightViewer> mainRoadLights;
+    [Header("Светофоры оси X")]
+    public List<TrafficLightViewer> xAxisLights;
 
-    [Header("Светофоры Боковой дороги")]
-    public List<TrafficLightViewer> sideRoadLights;
+    [Header("Светофоры оси Z")]
+    public List<TrafficLightViewer> zAxisLights;
 
     [Header("Настройки автономных фаз (в секундах)")]
     public bool useAutonomousCycle = true;
-    public float mainGreenDuration = 12f;
+    public float zGreenDuration = 12f;
     public float yellowDuration = 2f;
-    public float sideGreenDuration = 8f;
+    public float xGreenDuration = 8f;
 
-    public enum IntersectionPhase { MainGreen, AllYellowBeforeSide, SideGreen, AllYellowBeforeMain }
-    private IntersectionPhase currentPhase = IntersectionPhase.MainGreen;
+    public enum IntersectionPhase { Z_Green, YellowBeforeX, X_Green, YellowBeforeZ }
+    private IntersectionPhase currentPhase = IntersectionPhase.Z_Green;
 
     private Coroutine cycleCoroutine;
-    private bool isTransitioning = false; // Блокировка, пока горит жёлтый свет
+    private bool isTransitioning = false;
 
     void Start()
     {
+        // Явно включаем начальную фазу при старте, чтобы светофоры ожили
+        SetPhase(IntersectionPhase.Z_Green);
+
         if (useAutonomousCycle)
         {
             cycleCoroutine = StartCoroutine(IntersectionCycle());
         }
     }
 
-    // Автономный режим работы перекрёстка по кругу
+    // Автономный режим по осям
     IEnumerator IntersectionCycle()
     {
         while (true)
         {
-            SetPhase(IntersectionPhase.MainGreen);
-            yield return new WaitForSeconds(mainGreenDuration);
+            SetPhase(IntersectionPhase.Z_Green);
+            yield return new WaitForSeconds(zGreenDuration);
 
-            SetPhase(IntersectionPhase.AllYellowBeforeSide);
+            SetPhase(IntersectionPhase.YellowBeforeX);
             yield return new WaitForSeconds(yellowDuration);
 
-            SetPhase(IntersectionPhase.SideGreen);
-            yield return new WaitForSeconds(sideGreenDuration);
+            SetPhase(IntersectionPhase.X_Green);
+            yield return new WaitForSeconds(xGreenDuration);
 
-            SetPhase(IntersectionPhase.AllYellowBeforeMain);
+            SetPhase(IntersectionPhase.YellowBeforeZ);
             yield return new WaitForSeconds(yellowDuration);
         }
     }
 
-    // Единая точка изменения состояния всего перекрёстка
     public void SetPhase(IntersectionPhase newPhase)
     {
         currentPhase = newPhase;
 
         switch (currentPhase)
         {
-            case IntersectionPhase.MainGreen:
-                SetLightsState(mainRoadLights, TrafficLightViewer.LightColor.Green);
-                SetLightsState(sideRoadLights, TrafficLightViewer.LightColor.Red);
+            case IntersectionPhase.Z_Green:
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Green);
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
                 break;
 
-            case IntersectionPhase.AllYellowBeforeSide:
-            case IntersectionPhase.AllYellowBeforeMain:
-                SetLightsState(mainRoadLights, TrafficLightViewer.LightColor.Yellow);
-                SetLightsState(sideRoadLights, TrafficLightViewer.LightColor.Yellow);
+            case IntersectionPhase.YellowBeforeX:
+            case IntersectionPhase.YellowBeforeZ:
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Yellow);
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Yellow);
                 break;
 
-            case IntersectionPhase.SideGreen:
-                SetLightsState(mainRoadLights, TrafficLightViewer.LightColor.Red);
-                SetLightsState(sideRoadLights, TrafficLightViewer.LightColor.Green);
+            case IntersectionPhase.X_Green:
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Green);
                 break;
         }
     }
 
-    // Этот метод вызывается снаружи (шлюзом FastAPI / сервером)
+    // Принимает команды "Z_GREEN" или "X_GREEN" от ИИ
     public void ReceiveCommandFromPython(string command)
     {
-        // Отключаем автономный таймер при первой же команде извне
         if (useAutonomousCycle && cycleCoroutine != null)
         {
             StopCoroutine(cycleCoroutine);
@@ -86,41 +87,32 @@ public class IntersectionManager : MonoBehaviour
             Debug.Log("[IntersectionManager] Переключено на внешнее управление ИИ (FastAPI).");
         }
 
-        // Если прямо сейчас перекресток меняет фазу (горит жёлтый) — игнорируем спам командами
         if (isTransitioning) return;
 
         switch (command.ToUpper())
         {
-            case "MAIN_GREEN":
-                // Переключаем на Главную, только если сейчас горит Боковая
-                if (currentPhase == IntersectionPhase.SideGreen)
+            case "Z_GREEN":
+                if (currentPhase == IntersectionPhase.X_Green)
                 {
-                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.AllYellowBeforeMain, IntersectionPhase.MainGreen));
+                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.YellowBeforeZ, IntersectionPhase.Z_Green));
                 }
                 break;
 
-            case "SIDE_GREEN":
-                // Переключаем на Боковую, только если сейчас горит Главная
-                if (currentPhase == IntersectionPhase.MainGreen)
+            case "X_GREEN":
+                if (currentPhase == IntersectionPhase.Z_Green)
                 {
-                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.AllYellowBeforeSide, IntersectionPhase.SideGreen));
+                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.YellowBeforeX, IntersectionPhase.X_Green));
                 }
                 break;
         }
     }
 
-    // Корутина безопасного сетевого перехода через жёлтый свет
     IEnumerator NetworkTransitionRoutine(IntersectionPhase yellowPhase, IntersectionPhase finalPhase)
     {
         isTransitioning = true;
-
-        // Включаем предупреждающий желтый
         SetPhase(yellowPhase);
         yield return new WaitForSeconds(yellowDuration);
-
-        // Включаем целевой зеленый свет
         SetPhase(finalPhase);
-
         isTransitioning = false;
     }
 

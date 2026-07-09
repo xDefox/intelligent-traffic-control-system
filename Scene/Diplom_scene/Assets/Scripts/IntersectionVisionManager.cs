@@ -6,18 +6,21 @@ using UnityEngine.Networking;
 
 public class IntersectionVisionManager : MonoBehaviour
 {
-    [Header("Уникальный ID перекрестка (строка для соответствия бэкенду)")]
+    [Header("Связь с контроллером светофоров")]
+    [SerializeField] private IntersectionManager trafficLightController;
+
+    [Header("Уникальный ID перекрестка")]
     public string intersectionId = "intersection_1";
 
-    [Header("Настройки ИИ (Один на весь перекресток)")]
+    [Header("Настройки ИИ")]
     public ModelAsset sharedYoloModel;
     public float globalDetectionInterval = 0.2f;
 
-    [Header("Привязка камер по направлениям")]
-    public EdgeVisionCamera XCamera;
-    public EdgeVisionCamera ZCamera;
-    public EdgeVisionCamera xCamera;
-    public EdgeVisionCamera zCamera;
+    [Header("Камеры, контролирующие Ось X")]
+    public List<EdgeVisionCamera> xAxisCameras = new List<EdgeVisionCamera>();
+
+    [Header("Камеры, контролирующие Ось Z")]
+    public List<EdgeVisionCamera> zAxisCameras = new List<EdgeVisionCamera>();
 
     [Header("Сетевой шлюз (FastAPI)")]
     public string telemetryUrl = "http://127.0.0.1:8050/api/v1/telemetry";
@@ -25,7 +28,6 @@ public class IntersectionVisionManager : MonoBehaviour
     private Worker sharedEngine;
     private Tensor<float> sharedInputTensor;
 
-    // Вложенные DTO-структуры, которые на 100% повторяют Pydantic-схему бэка
     [System.Serializable]
     private class LaneDetectionDTO
     {
@@ -42,15 +44,22 @@ public class IntersectionVisionManager : MonoBehaviour
         public List<LaneDetectionDTO> lanes;
     }
 
+    [System.Serializable]
+    private class BackendResponseDTO
+    {
+        public string target_phase;
+        public bool cascade_applied;
+    }
+
     void Start()
     {
-        if (sharedYoloModel == null)
+        if (trafficLightController == null)
         {
-            Debug.LogError($"[{gameObject.name}] Не задана YOLO модель в IntersectionVisionManager!");
-            return;
+            trafficLightController = GetComponent<IntersectionManager>();
         }
 
-        // Инициализируем ИИ ОДИН раз
+        if (sharedYoloModel == null) return;
+
         Model runtimeModel = ModelLoader.Load(sharedYoloModel);
         sharedEngine = new Worker(runtimeModel, BackendType.GPUCompute);
         sharedInputTensor = new Tensor<float>(new TensorShape(1, 3, 1280, 1280));
@@ -62,49 +71,36 @@ public class IntersectionVisionManager : MonoBehaviour
     {
         while (true)
         {
-            // Создаем динамический список для полос
             List<LaneDetectionDTO> lanesList = new List<LaneDetectionDTO>();
 
-            // Опрашиваем камеры и сразу пакуем результаты в новый DTO формат
-            // Имена "lane_north", "lane_west" и т.д. заставят наш traffic_brain правильно распределять фазы
-            if (XCamera != null)
+            // Опрашиваем все назначенные камеры для оси X
+            for (int i = 0; i < xAxisCameras.Count; i++)
             {
-                lanesList.Add(new LaneDetectionDTO
+                if (xAxisCameras[i] != null)
                 {
-                    lane_id = "lane_north",
-                    car_count = ProcessSingleCamera(XCamera),
-                    avg_speed = 0f // Пока заглушка, если скорость не трекается
-                });
-            }
-            if (ZCamera != null)
-            {
-                lanesList.Add(new LaneDetectionDTO
-                {
-                    lane_id = "lane_south",
-                    car_count = ProcessSingleCamera(ZCamera),
-                    avg_speed = 0f
-                });
-            }
-            if (xCamera != null)
-            {
-                lanesList.Add(new LaneDetectionDTO
-                {
-                    lane_id = "lane_east",
-                    car_count = ProcessSingleCamera(xCamera),
-                    avg_speed = 0f
-                });
-            }
-            if (zCamera != null)
-            {
-                lanesList.Add(new LaneDetectionDTO
-                {
-                    lane_id = "lane_west",
-                    car_count = ProcessSingleCamera(zCamera),
-                    avg_speed = 0f
-                });
+                    lanesList.Add(new LaneDetectionDTO
+                    {
+                        lane_id = $"lane_{intersectionId}_X_{i}",
+                        car_count = ProcessSingleCamera(xAxisCameras[i]),
+                        avg_speed = 0f
+                    });
+                }
             }
 
-            // Отправляем агрегированные данные новым пакетом
+            // Опрашиваем все назначенные камеры для оси Z
+            for (int i = 0; i < zAxisCameras.Count; i++)
+            {
+                if (zAxisCameras[i] != null)
+                {
+                    lanesList.Add(new LaneDetectionDTO
+                    {
+                        lane_id = $"lane_{intersectionId}_Z_{i}",
+                        car_count = ProcessSingleCamera(zAxisCameras[i]),
+                        avg_speed = 0f
+                    });
+                }
+            }
+
             if (lanesList.Count > 0)
             {
                 StartCoroutine(SendCombinedTelemetry(lanesList));
@@ -117,26 +113,22 @@ public class IntersectionVisionManager : MonoBehaviour
     int ProcessSingleCamera(EdgeVisionCamera cam)
     {
         if (cam == null) return 0;
-
         RenderTexture cameraRt = cam.CaptureFrame();
         if (cameraRt == null) return 0;
 
         TextureConverter.ToTensor(cameraRt, sharedInputTensor);
-
         sharedEngine.Schedule(sharedInputTensor);
-        Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
 
-        int carsCount = cam.UpdateDetectionsAndGetCount(outputTensor);
-        return carsCount;
+        Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
+        return cam.UpdateDetectionsAndGetCount(outputTensor);
     }
 
     IEnumerator SendCombinedTelemetry(List<LaneDetectionDTO> lanes)
     {
-        // Формируем финальный пакет
         IntersectionUpdateDTO payload = new IntersectionUpdateDTO
         {
             intersection_id = intersectionId,
-            camera_id = "central_manager", // Так как этот скрипт агрегирует данные централизованно
+            camera_id = "central_manager",
             lanes = lanes
         };
 
@@ -151,14 +143,21 @@ public class IntersectionVisionManager : MonoBehaviour
 
             yield return request.SendWebRequest();
 
-            if (request.result != UnityWebRequest.Result.Success)
+            if (request.result == UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[API Error] Не удалось отправить телеметрию: {request.error}");
-            }
-            else
-            {
-                // Лог ответа от FastAPI — теперь он вернет корректную фазу
-                Debug.Log($"[API Success] Ответ сервера: {request.downloadHandler.text}");
+                string jsonResponse = request.downloadHandler.text;
+                try
+                {
+                    BackendResponseDTO responseData = JsonUtility.FromJson<BackendResponseDTO>(jsonResponse);
+                    if (responseData != null && trafficLightController != null)
+                    {
+                        trafficLightController.ReceiveCommandFromPython(responseData.target_phase);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[JSON Parse Error] {ex.Message}");
+                }
             }
         }
     }
