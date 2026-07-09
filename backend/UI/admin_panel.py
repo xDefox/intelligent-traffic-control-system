@@ -223,4 +223,4 @@ class TrafficUIFactory:
 
 if __name__ == "__main__":
     ui_factory = TrafficUIFactory()
-    ft.app(target=ui_factory.build_ui)
+    ft.run(ui_factory.build_ui)
