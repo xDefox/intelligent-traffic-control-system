@@ -14,10 +14,10 @@ public class IntersectionVisionManager : MonoBehaviour
     public float globalDetectionInterval = 0.2f;
 
     [Header("Привязка камер по направлениям")]
-    public EdgeVisionCamera northCamera;
-    public EdgeVisionCamera southCamera;
-    public EdgeVisionCamera eastCamera;
-    public EdgeVisionCamera westCamera;
+    public EdgeVisionCamera XCamera;
+    public EdgeVisionCamera ZCamera;
+    public EdgeVisionCamera xCamera;
+    public EdgeVisionCamera zCamera;
 
     [Header("Сетевой шлюз (FastAPI)")]
     public string telemetryUrl = "http://127.0.0.1:8050/api/v1/telemetry";
@@ -67,39 +67,39 @@ public class IntersectionVisionManager : MonoBehaviour
 
             // Опрашиваем камеры и сразу пакуем результаты в новый DTO формат
             // Имена "lane_north", "lane_west" и т.д. заставят наш traffic_brain правильно распределять фазы
-            if (northCamera != null)
+            if (XCamera != null)
             {
                 lanesList.Add(new LaneDetectionDTO
                 {
                     lane_id = "lane_north",
-                    car_count = ProcessSingleCamera(northCamera),
+                    car_count = ProcessSingleCamera(XCamera),
                     avg_speed = 0f // Пока заглушка, если скорость не трекается
                 });
             }
-            if (southCamera != null)
+            if (ZCamera != null)
             {
                 lanesList.Add(new LaneDetectionDTO
                 {
                     lane_id = "lane_south",
-                    car_count = ProcessSingleCamera(southCamera),
+                    car_count = ProcessSingleCamera(ZCamera),
                     avg_speed = 0f
                 });
             }
-            if (eastCamera != null)
+            if (xCamera != null)
             {
                 lanesList.Add(new LaneDetectionDTO
                 {
                     lane_id = "lane_east",
-                    car_count = ProcessSingleCamera(eastCamera),
+                    car_count = ProcessSingleCamera(xCamera),
                     avg_speed = 0f
                 });
             }
-            if (westCamera != null)
+            if (zCamera != null)
             {
                 lanesList.Add(new LaneDetectionDTO
                 {
                     lane_id = "lane_west",
-                    car_count = ProcessSingleCamera(westCamera),
+                    car_count = ProcessSingleCamera(zCamera),
                     avg_speed = 0f
                 });
             }

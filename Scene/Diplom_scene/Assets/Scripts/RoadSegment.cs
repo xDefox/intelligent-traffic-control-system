@@ -28,9 +28,14 @@ public class RoadSegment : MonoBehaviour
         }
     }
 
+
     void OnDrawGizmos()
     {
-        if (localWaypoints == null || localWaypoints.Count == 0) return;
+        if (!TrafficGenerator.ShowDebugGizmos)
+            return;
+
+        if (localWaypoints == null || localWaypoints.Count == 0)
+            return;
 
         // Рисуем линию сегмента
         Gizmos.color = Color.cyan;
