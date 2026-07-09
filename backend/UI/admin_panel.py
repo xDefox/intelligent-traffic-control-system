@@ -1,17 +1,33 @@
-# admin_ui.py
 import flet as ft
 import asyncio
 import json
 import websockets
+import traceback  # Нужно для отладки внутренних скрытых ошибок UI
 
 
 class TrafficUIFactory:
     def __init__(self):
         self.page = None
-        self.lane_cards = {}  # Ключ теперь: "interID_laneID"
-        self.grid = ft.Column(spacing=15)
+        self.lane_cards = {}  # Ключ: "interID_laneID"
+
+        # Главная вертикальная колонка для размещения контейнеров перекрестков
+        self.grid = ft.Column(spacing=20, scroll=ft.ScrollMode.AUTO, expand=True)
+
         self.status_text = ft.Text("ОЖИДАНИЕ СЕРВЕРА...", color="yellow", weight=ft.FontWeight.BOLD)
-        self.intersection_headers = {}  # Хранилище заголовков для блоков
+
+        # Хранилище монолитных контейнеров перекрестков
+        self.intersection_containers = {}  # inter_id -> ft.Container
+        self.intersection_headers = {}  # inter_id -> ft.Text
+        self.intersection_lanes_layout = {}  # inter_id -> ft.Column (внутренний слой для карточек)
+
+        # Выпадающий список для фильтрации
+        self.filter_dropdown = ft.Dropdown(
+            label="Фильтр перекрёстков",
+            options=[ft.dropdown.Option("Все перекрёстки")],
+            value="Все перекрёстки",
+            width=300
+        )
+        self.filter_dropdown.on_change = self.on_filter_change
 
     def build_ui(self, page: ft.Page):
         self.page = page
@@ -25,13 +41,15 @@ class TrafficUIFactory:
                 self.status_text
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Divider(),
+            self.filter_dropdown,
+            ft.Divider(),
             self.grid
         )
         page.run_task(self.connect_to_backend)
 
     def _create_lane_card(self, inter_id: str, lane_id: str):
         count_text = ft.Text("Машин в очереди: 0", size=14)
-        speed_text = ft.Text("Скорость: 0.0 км/ч", size=14)
+        load_text = ft.Text("Нагрузка: 0%", size=14)
         light_indicator = ft.Container(width=20, height=20, border_radius=10, bgcolor="red")
 
         card = ft.Container(
@@ -43,14 +61,14 @@ class TrafficUIFactory:
                     light_indicator
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 count_text,
-                speed_text
+                load_text  # Скорость убрали, добавили процент нагрузки
             ]),
             bgcolor="surfacevariant",
             padding=12,
             border_radius=10,
             expand=True
         )
-        return card, count_text, speed_text, light_indicator
+        return card, count_text, load_text, light_indicator
 
     async def connect_to_backend(self):
         uri = "ws://127.0.0.1:8050/ws/monitor"
@@ -59,16 +77,30 @@ class TrafficUIFactory:
                 async with websockets.connect(uri) as websocket:
                     self.status_text.value = "СЕТЬ UTC АКТИВНА"
                     self.status_text.color = "greenaccent"
-                    self.page.update()
+                    if self.page:
+                        self.page.update()
 
                     async for message in websocket:
                         data = json.loads(message)
-                        self.update_ui_state(data)
-            except Exception:
+
+                        # КРИТИЧЕСКИ ВАЖНО: Изолируем ошибки UI, чтобы сокет не падал
+                        try:
+                            self.update_ui_state(data)
+                        except Exception as ui_err:
+                            print("❌ Ошибка отрисовки внутри update_ui_state:")
+                            traceback.print_exc()
+
+            except Exception as net_err:
+                print(f"📡 Ошибка сети Веб-сокета: {net_err}")
                 self.status_text.value = "ПОТЕРЯ СВЯЗИ С UTC БЭКЕНДОМ..."
                 self.status_text.color = "red"
-                self.page.update()
+                if self.page:
+                    self.page.update()
                 await asyncio.sleep(2)
+
+    def on_filter_change(self, e):
+        self.filter_dropdown.value = e.control.value
+        self.apply_filter()
 
     def update_ui_state(self, data: dict):
         inter_id = data.get("intersection_id", "unknown")
@@ -77,57 +109,118 @@ class TrafficUIFactory:
 
         structure_changed = False
 
-        # Если этот перекрёсток зашёл в сеть впервые — создаём для него заголовок
-        if inter_id not in self.intersection_headers:
+        # 1. Если перекрёсток зашел впервые — собираем монолитный контейнер-блок
+        if inter_id not in self.intersection_containers:
             self.intersection_headers[inter_id] = ft.Text(
-                f"🛑 Перекрёсток: {inter_id.upper()} | Фаза: {current_phase}",
+                f"🛑 Перекрёсток: {inter_id.upper()} | Текущая фаза: {current_phase}",
                 size=18, color="blueaccent", weight=ft.FontWeight.BOLD
             )
+
+            lanes_layout = ft.Column(spacing=15)
+            self.intersection_lanes_layout[inter_id] = lanes_layout
+
+            # Тот самый единый контейнер под весь перекрёсток
+            # Тот самый единый контейнер под весь перекрёсток
+            inter_container = ft.Container(
+                content=ft.Column([
+                    self.intersection_headers[inter_id],
+                    ft.Divider(),
+                    lanes_layout
+                ]),
+                bgcolor="#23272A",
+                padding=20,
+                border_radius=12,
+                # Абсолютно неубиваемый способ отрисовки рамки для всех версий Flet:
+                border=ft.border.Border(
+                    top=ft.border.BorderSide(1, "blueaccent"),
+                    bottom=ft.border.BorderSide(1, "blueaccent"),
+                    left=ft.border.BorderSide(1, "blueaccent"),
+                    right=ft.border.BorderSide(1, "blueaccent")
+                ),
+            )
+
+            self.intersection_containers[inter_id] = inter_container
+            self.grid.controls.append(inter_container)
             structure_changed = True
         else:
-            self.intersection_headers[inter_id].value = f"🛑 Перекрёсток: {inter_id.upper()} | Фаза: {current_phase}"
+            self.intersection_headers[
+                inter_id].value = f"🛑 Перекрёсток: {inter_id.upper()} | Текущая фаза: {current_phase}"
 
+        # 2. Обрабатываем полосы внутри этого перекрёстка
+        cards_to_rebuild = False
         for lane in lanes:
             lane_id = lane["lane_id"]
-            # Уникальный составной ключ
             global_key = f"{inter_id}_{lane_id}"
 
+            # Расчёт процента нагрузки (условный лимит полосы — 15 машин)
+            car_count = lane.get("car_count", 0)
+            max_capacity = 15
+            load_percentage = min(100, int((car_count / max_capacity) * 100))
+
             if global_key not in self.lane_cards:
-                card, count_ref, speed_ref, light_ref = self._create_lane_card(inter_id, lane_id)
+                card, count_ref, load_ref, light_ref = self._create_lane_card(inter_id, lane_id)
                 self.lane_cards[global_key] = {
                     "inter_id": inter_id,
                     "card": card,
                     "count_text": count_ref,
-                    "speed_text": speed_ref,
+                    "load_text": load_ref,
                     "light": light_ref
                 }
-                structure_changed = True
+                cards_to_rebuild = True
 
-            # Обновляем внутренности карточек
-            self.lane_cards[global_key]["count_text"].value = f"Машин: {lane['car_count']}"
-            self.lane_cards[global_key]["speed_text"].value = f"Скорость: {lane['avg_speed']} км/ч"
+            # Спокойно обновляем значения виджетов в памяти
+            self.lane_cards[global_key]["count_text"].value = f"Машин в очереди: {car_count}"
+            self.lane_cards[global_key]["load_text"].value = f"Нагрузка: {load_percentage}%"
             self.lane_cards[global_key]["light"].bgcolor = lane["light"]
 
-        # Если появились новые узлы или полосы — полностью перестраиваем дерево разметки
+        # 3. Если у перекрёстка появились новые полосы — перестраиваем внутренний слой контейнера
+        if cards_to_rebuild:
+            lanes_layout = self.intersection_lanes_layout[inter_id]
+            lanes_layout.controls.clear()
+
+            belonging_cards = [info["card"] for info in self.lane_cards.values() if info["inter_id"] == inter_id]
+
+            # Пакуем полосы строго по 2 штуки в один горизонтальный ряд Row
+            for i in range(0, len(belonging_cards), 2):
+                lanes_layout.controls.append(ft.Row(belonging_cards[i:i + 2], spacing=15))
+            structure_changed = True
+
+        # 4. Финальное обновление интерфейса
         if structure_changed:
-            self.grid.controls.clear()
+            # КРИТИЧЕСКИ ВАЖНО: Сохраняем то, что пользователь уже выбрал руками
+            current_val = self.filter_dropdown.value
 
-            # Группируем карточки по их перекрёсткам
-            for id_inter, header_component in self.intersection_headers.items():
-                self.grid.controls.append(header_component)
+            options = [ft.dropdown.Option("Все перекрёстки")]
+            for existing_id in sorted(self.intersection_containers.keys()):
+                options.append(ft.dropdown.Option(existing_id))
 
-                # Собираем все карточки, принадлежащие текущему перекрёстку
-                belonging_cards = [info["card"] for info in self.lane_cards.values() if info["inter_id"] == id_inter]
+            self.filter_dropdown.options = options
 
-                # Пакуем по 2 штуки в ряд
-                for i in range(0, len(belonging_cards), 2):
-                    self.grid.controls.append(ft.Row(belonging_cards[i:i + 2], spacing=15))
+            # Принудительно возвращаем выбранное значение назад в Dropdown после перезаписи options
+            # Если старого значения больше нет в списке (хотя оно должно быть), откатываемся на "Все перекрёстки"
+            valid_keys = [opt.key for opt in options if opt.key]
+            self.filter_dropdown.value = current_val if current_val in valid_keys else "Все перекрёстки"
 
-                self.grid.controls.append(ft.Divider())
+            # ВАЖНО: Применяем фильтр ВЫБОРКИ ВСЕГДА (на каждый пришедший пакет данных от тика симуляции).
+            # Метод apply_filter сам вызовет self.page.update(), так что дублировать его ниже не нужно.
+        self.apply_filter()
 
-        self.page.update()
+    def apply_filter(self):
+        selected_filter = self.filter_dropdown.value
+        if not selected_filter:
+            selected_filter = "Все перекрёстки"
+
+        # Включаем/выключаем видимость целых контейнеров перекрестков
+        for inter_id, container in self.intersection_containers.items():
+            if selected_filter == "Все перекрёстки" or selected_filter.strip().lower() == inter_id.strip().lower():
+                container.visible = True
+            else:
+                container.visible = False
+
+        if self.page:
+            self.page.update()
 
 
 if __name__ == "__main__":
     ui_factory = TrafficUIFactory()
-    ft.run(ui_factory.build_ui)
+    ft.app(target=ui_factory.build_ui)
