@@ -4,29 +4,39 @@ using System.Collections.Generic;
 public class TrafficGenerator : MonoBehaviour
 {
     [System.Serializable]
-    public struct RouteData
+    public struct SpawnRoute
     {
-        public string routeName;
+        public string name;
+        [Tooltip("Точка, где физически появится машина (обычно в самом начале дороги)")]
         public Transform spawnPoint;
-        public Transform routeParent;
-
-        [Header("Настройки ПДД")]
-        public OncomingTrafficDetector oncomingDetector;
-
-        [Tooltip("Индекс вейпоинта (0, 1, 2...), который лежит ПЕРЕД стоп-линией этого маршрута")]
-        public int stopWaypointIndex;
+        [Tooltip("Стартовая полоса (перетаскивать сюда объект Lane_Forward нужной дороги)")]
+        public RoadSegment startSegment;
     }
 
-    [Header("Настройки префабов")]
+    [Header("Настройки префабов машин")]
     public List<GameObject> carPrefabs;
 
-    [Header("Все возможные маршруты перекрестка")]
-    public List<RouteData> allRoutes;
+    [Header("Точки спавна на въездах в систему")]
+    public List<SpawnRoute> spawnRoutes;
 
     [Header("Настройки интенсивности")]
     public float spawnInterval = 3f;
 
+    [Header("Настройки отображения")]
+    public bool showRoadGizmos = true;
+    public static bool ShowDebugGizmos { get; private set; } = true;
+
     private float timer;
+
+    private void OnValidate()
+    {
+        ShowDebugGizmos = showRoadGizmos;
+    }
+
+    private void Awake()
+    {
+        ShowDebugGizmos = showRoadGizmos;
+    }
 
     void Update()
     {
@@ -40,65 +50,36 @@ public class TrafficGenerator : MonoBehaviour
 
     void SpawnRandomVehicle()
     {
-        if (carPrefabs.Count == 0 || allRoutes.Count == 0) return;
+        if (carPrefabs.Count == 0 || spawnRoutes.Count == 0) return;
 
-        RouteData selectedRoute = allRoutes[Random.Range(0, allRoutes.Count)];
+        // Выбираем случайную точку въезда из списка
+        SpawnRoute selectedRoute = spawnRoutes[Random.Range(0, spawnRoutes.Count)];
 
-        if (selectedRoute.routeParent == null || selectedRoute.spawnPoint == null) return;
+        if (selectedRoute.startSegment == null || selectedRoute.spawnPoint == null) return;
 
-        // --- НАЧАЛО ПРОВЕРКИ ЗАНЯТОСТИ ТОЧКИ СПАВНА ---
-        // Получаем маску слоя Traffic
-        int trafficMask = LayerMask.GetMask("Traffic");
-
-        // Полуразмеры коробки проверки. Коробка будет размером 2.4м в ширину, 2м в высоту и 4м в длину.
-        // Этого с запасом хватит, чтобы заметить бампер или кузов предыдущей машины.
-        Vector3 boxHalfExtents = new Vector3(1.2f, 1f, 2f);
-
-        // Проверяем физическое пространство вокруг выбранной точки спавна
-        if (Physics.CheckBox(selectedRoute.spawnPoint.position, boxHalfExtents, selectedRoute.spawnPoint.rotation, trafficMask))
-        {
-            // Если точка занята другой машиной, просто прерываем метод.
-            // Машина не заспавнится, пока точка не освободится.
-            Debug.Log($"[TrafficGenerator] Спавн на маршруте '{selectedRoute.routeName}' отменен: точка занята.");
-            return;
-        }
-        // --- КОНЕЦ ПРОВЕРКИ ЗАНЯТОСТИ ---
-
+        // Спавним случайную машину из доступных префабов
         GameObject randomCarPrefab = carPrefabs[Random.Range(0, carPrefabs.Count)];
-
-        // Собираем вейпоинты
-        List<Transform> extractedWaypoints = new List<Transform>();
-        foreach (Transform child in selectedRoute.routeParent)
-        {
-            extractedWaypoints.Add(child);
-        }
-
-        if (extractedWaypoints.Count == 0) return;
-
-        // Спавним машину (теперь это гарантированно безопасно)
         GameObject car = Instantiate(randomCarPrefab, selectedRoute.spawnPoint.position, selectedRoute.spawnPoint.rotation);
 
         WaypointNavigator navigator = car.GetComponent<WaypointNavigator>();
         if (navigator != null)
         {
-            // Передаем вейпоинты, детектор и индекс стоп-точки
-            navigator.SetupRoute(extractedWaypoints, selectedRoute.oncomingDetector, selectedRoute.stopWaypointIndex);
+            // Передаем машине сегмент дороги. Настройки ПДД она подтянет из него автоматически
+            navigator.SetupSegment(selectedRoute.startSegment, true);
         }
     }
 
-    // Отрисовка зон спавна в редакторе для удобства настройки
+    // Отрисовка зон спавна в редакторе
     void OnDrawGizmosSelected()
     {
-        if (allRoutes == null) return;
+        if (spawnRoutes == null) return;
 
         Gizmos.color = Color.yellow;
-        foreach (var route in allRoutes)
+        foreach (var route in spawnRoutes)
         {
             if (route.spawnPoint != null)
             {
-                // Устанавливаем матрицу гизмо под позицию и поворот каждой точки спавна
                 Gizmos.matrix = Matrix4x4.TRS(route.spawnPoint.position, route.spawnPoint.rotation, Vector3.one);
-                // Рисуем рамку зоны проверки (размеры соответствуют boxHalfExtents * 2)
                 Gizmos.DrawWireCube(Vector3.zero, new Vector3(2.4f, 2f, 4f));
             }
         }

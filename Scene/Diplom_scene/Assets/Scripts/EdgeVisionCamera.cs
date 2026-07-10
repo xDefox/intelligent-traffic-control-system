@@ -25,7 +25,7 @@ public class EdgeVisionCamera : MonoBehaviour
     }
 
     private List<BoundingBox> detectedBoxes = new List<BoundingBox>();
-    private HashSet<int> vehicleClassIds = new HashSet<int> {0, 1}; //для yolama8m  2, 3, 5, 7 
+    private HashSet<int> vehicleClassIds = new HashSet<int> { 0, 1 }; // 2, 3, 5, 7 для yolo8
 
     [Header("Зона детекции (ROI) для этой камеры")]
     public Vector2[] roiPolygon = new Vector2[]
@@ -36,16 +36,19 @@ public class EdgeVisionCamera : MonoBehaviour
         new Vector2(0.15f, 0.80f)
     };
 
+    [Header("Интерактив в игре")]
+    [Tooltip("Включите, чтобы перетаскивать точки ROI мышкой прямо в окне Game")]
+    public bool editRoiInGame = false;
+    private int selectedPointIndex = -1;
+
     private LineRenderer roiLineRenderer;
 
     void Start()
     {
         targetCamera = GetComponent<Camera>();
-
-        // Каждая камера рендерит в свою текстуру
         rt = new RenderTexture(1280, 720, 24);
 
-        // Настройка линий ROI в редакторе
+        // Настройка линий ROI
         roiLineRenderer = gameObject.AddComponent<LineRenderer>();
         roiLineRenderer.useWorldSpace = false;
         roiLineRenderer.positionCount = roiPolygon.Length;
@@ -56,13 +59,8 @@ public class EdgeVisionCamera : MonoBehaviour
         roiLineRenderer.startColor = Color.yellow;
         roiLineRenderer.endColor = Color.yellow;
 
-        for (int i = 0; i < roiPolygon.Length; i++)
-        {
-            Vector3 viewportPoint = new Vector3(roiPolygon[i].x, roiPolygon[i].y, 1.0f);
-            Vector3 worldPoint = targetCamera.ViewportToWorldPoint(viewportPoint);
-            Vector3 localPoint = targetCamera.transform.InverseTransformPoint(worldPoint);
-            roiLineRenderer.SetPosition(i, localPoint);
-        }
+        // Первичный просчет линий
+        UpdateRoiLines();
 
         // Инициализация пула UI-рамок
         if (targetCanvas != null)
@@ -95,6 +93,82 @@ public class EdgeVisionCamera : MonoBehaviour
         }
     }
 
+    void Update()
+    {
+        // 1. Если активирован режим редактирования — ловим мышь
+        if (editRoiInGame)
+        {
+            try
+            {
+                HandleInGameRoiEditing();
+            }
+            catch (System.InvalidOperationException)
+            {
+                // Игнорируем ошибки старого Input при использовании Input System Package
+            }
+        }
+
+        // 2. Обновляем позиции LineRenderer каждый кадр (для плавного изменения на лету)
+        UpdateRoiLines();
+    }
+
+    private void HandleInGameRoiEditing()
+    {
+        if (targetCamera == null) return;
+
+        // Переводим позицию курсора в нормализованные координаты Viewport (от 0 до 1)
+        Vector2 mouseViewportPos = targetCamera.ScreenToViewportPoint(Input.mousePosition);
+
+        // ЛКМ зажата: ищем ближайшую точку для захвата
+        if (Input.GetMouseButtonDown(0))
+        {
+            selectedPointIndex = -1;
+            float grabRadius = 0.04f; // Радиус захвата точки (4% от размера экрана)
+
+            for (int i = 0; i < roiPolygon.Length; i++)
+            {
+                float distance = Vector2.Distance(mouseViewportPos, roiPolygon[i]);
+                if (distance < grabRadius)
+                {
+                    grabRadius = distance;
+                    selectedPointIndex = i;
+                }
+            }
+        }
+
+        // Процесс перетаскивания
+        if (Input.GetMouseButton(0) && selectedPointIndex != -1)
+        {
+            // Обновляем координату точки, зажимая её в границах экрана
+            roiPolygon[selectedPointIndex] = new Vector2(
+                Mathf.Clamp01(mouseViewportPos.x),
+                Mathf.Clamp01(mouseViewportPos.y)
+            );
+        }
+
+        // Отпустили ЛКМ — сбрасываем захват
+        if (Input.GetMouseButtonUp(0))
+        {
+            selectedPointIndex = -1;
+        }
+    }
+
+    public void UpdateRoiLines()
+    {
+        if (roiLineRenderer == null || targetCamera == null) return;
+
+        if (roiLineRenderer.positionCount != roiPolygon.Length)
+            roiLineRenderer.positionCount = roiPolygon.Length;
+
+        for (int i = 0; i < roiPolygon.Length; i++)
+        {
+            Vector3 viewportPoint = new Vector3(roiPolygon[i].x, roiPolygon[i].y, 1.0f);
+            Vector3 worldPoint = targetCamera.ViewportToWorldPoint(viewportPoint);
+            Vector3 localPoint = targetCamera.transform.InverseTransformPoint(worldPoint);
+            roiLineRenderer.SetPosition(i, localPoint);
+        }
+    }
+
     void CreateUiLine(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 sizeOffset)
     {
         GameObject line = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -119,7 +193,6 @@ public class EdgeVisionCamera : MonoBehaviour
         img.color = Color.green;
     }
 
-    // Вызывается из главного менеджера, чтобы принудительно обновить кадр
     public RenderTexture CaptureFrame()
     {
         if (targetCamera == null || rt == null) return null;
@@ -131,7 +204,6 @@ public class EdgeVisionCamera : MonoBehaviour
         return rt;
     }
 
-    // Принимает готовый аутпут-тензор, выковыривает машинки конкретно этой камеры
     public int UpdateDetectionsAndGetCount(Tensor<float> output)
     {
         if (output == null) return 0;
@@ -171,11 +243,9 @@ public class EdgeVisionCamera : MonoBehaviour
                     normW = Mathf.Clamp01(normW);
                     normH = Mathf.Clamp01(normH);
 
-                    // Разворачиваем Y для Canvas
                     float unityY = 1f - normY;
                     Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
 
-                    // Проверяем, попал ли центр машины в полигон (ROI) текущей камеры
                     if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
                     {
                         candidates.Add(new BoundingBox { xCenter = normX, yCenter = unityY, width = normW, height = normH, confidence = maxScore });
@@ -185,8 +255,6 @@ public class EdgeVisionCamera : MonoBehaviour
         }
 
         detectedBoxes = ApplyNMS(candidates, iouThreshold);
-
-        // Обновляем визуальные рамки на экране
         UpdateBoxVisuals();
 
         return detectedBoxes.Count;
