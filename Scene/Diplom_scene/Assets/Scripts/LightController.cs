@@ -4,13 +4,13 @@ using System.Collections.Generic;
 
 public class IntersectionManager : MonoBehaviour
 {
-    [Header("Светофоры оси X")]
+    [Header("РЎРІРµС‚РѕС„РѕСЂС‹ РѕСЃРё X")]
     public List<TrafficLightViewer> xAxisLights;
 
-    [Header("Светофоры оси Z")]
+    [Header("РЎРІРµС‚РѕС„РѕСЂС‹ РѕСЃРё Z")]
     public List<TrafficLightViewer> zAxisLights;
 
-    [Header("Настройки автономных фаз (в секундах)")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё Р°РІС‚РѕРЅРѕРјРЅС‹С… С„Р°Р· (РІ СЃРµРєСѓРЅРґР°С…)")]
     public bool useAutonomousCycle = true;
     public float zGreenDuration = 12f;
     public float yellowDuration = 2f;
@@ -24,7 +24,7 @@ public class IntersectionManager : MonoBehaviour
 
     void Start()
     {
-        // Явно включаем начальную фазу при старте, чтобы светофоры ожили
+        // РЇРІРЅРѕ РІРєР»СЋС‡Р°РµРј РЅР°С‡Р°Р»СЊРЅСѓСЋ С„Р°Р·Сѓ РїСЂРё СЃС‚Р°СЂС‚Рµ, С‡С‚РѕР±С‹ СЃРІРµС‚РѕС„РѕСЂС‹ РѕР¶РёР»Рё
         SetPhase(IntersectionPhase.Z_Green);
 
         if (useAutonomousCycle)
@@ -33,7 +33,7 @@ public class IntersectionManager : MonoBehaviour
         }
     }
 
-    // Автономный режим по осям
+    // РђРІС‚РѕРЅРѕРјРЅС‹Р№ СЂРµР¶РёРј РїРѕ РѕСЃСЏРј
     IEnumerator IntersectionCycle()
     {
         while (true)
@@ -76,35 +76,91 @@ public class IntersectionManager : MonoBehaviour
         }
     }
 
-    // Принимает команды "Z_GREEN" или "X_GREEN" от ИИ
-    public void ReceiveCommandFromPython(string command)
+    // РџСЂРёРЅРёРјР°РµС‚ РєРѕРјР°РЅРґС‹ РґР»СЏ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СЃРІРµС‚РѕС„РѕСЂР° РѕС‚ РР
+    public void ReceiveCommandForLane(string laneId, string command, float greenDuration = 0f)
     {
         if (useAutonomousCycle && cycleCoroutine != null)
         {
             StopCoroutine(cycleCoroutine);
             cycleCoroutine = null;
             useAutonomousCycle = false;
-            Debug.Log("[IntersectionManager] Переключено на внешнее управление ИИ (FastAPI).");
+            Debug.Log("[IntersectionManager] РџРµСЂРµРєР»СЋС‡РµРЅРѕ РЅР° РІРЅРµС€РЅРµРµ СѓРїСЂР°РІР»РµРЅРёРµ РР (FastAPI).");
         }
 
         if (isTransitioning) return;
 
-        switch (command.ToUpper())
+        // РћРїСЂРµРґРµР»СЏРµРј, РєР°РєРѕР№ СЃРІРµС‚РѕС„РѕСЂ РЅСѓР¶РЅРѕ СѓРїСЂР°РІР»СЏС‚СЊ
+        TrafficLightViewer targetLight = GetLightForLane(laneId);
+        if (targetLight == null)
         {
-            case "Z_GREEN":
-                if (currentPhase == IntersectionPhase.X_Green)
-                {
-                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.YellowBeforeZ, IntersectionPhase.Z_Green));
-                }
-                break;
+            Debug.LogWarning($"[IntersectionManager] РќРµ РЅР°Р№РґРµРЅ СЃРІРµС‚РѕС„РѕСЂ РґР»СЏ {laneId}");
+            return;
+        }
 
-            case "X_GREEN":
-                if (currentPhase == IntersectionPhase.Z_Green)
+        // РџР РЇРњРћ СѓРїСЂР°РІР»СЏРµРј СЃРІРµС‚РѕС„РѕСЂРѕРј С‡РµСЂРµР· TrafficLightViewer
+        StartCoroutine(ExecuteLightCommand(targetLight, command, greenDuration));
+    }
+
+    private TrafficLightViewer GetLightForLane(string laneId)
+    {
+        // РР·РІР»РµРєР°РµРј РЅРѕРјРµСЂ РїРѕРґС…РѕРґР°: "intersection_1_approach_0" -> 0
+        if (laneId.Contains("_approach_"))
+        {
+            string[] parts = laneId.Split('_');
+            if (int.TryParse(parts[parts.Length - 1], out int approachIndex))
+            {
+                // X-axis: 0,1 -> xAxisLights[0], xAxisLights[1]
+                // Z-axis: 2,3 -> zAxisLights[0], zAxisLights[1]
+                if (approachIndex < 2 && approachIndex < xAxisLights.Count)
                 {
-                    StartCoroutine(NetworkTransitionRoutine(IntersectionPhase.YellowBeforeX, IntersectionPhase.X_Green));
+                    return xAxisLights[approachIndex];
                 }
+                else if (approachIndex >= 2 && (approachIndex - 2) < zAxisLights.Count)
+                {
+                    return zAxisLights[approachIndex - 2];
+                }
+            }
+        }
+        return null;
+    }
+
+    private IEnumerator ExecuteLightCommand(TrafficLightViewer light, string command, float greenDuration)
+    {
+        isTransitioning = true;
+
+        string cmd = command.ToUpper().Trim();
+        
+        switch (cmd)
+        {
+            case "GREEN":
+            case "NS":
+            case "EW":
+                // Р–С‘Р»С‚С‹Р№
+                light.SwitchToColor(TrafficLightViewer.LightColor.Yellow);
+                yield return new WaitForSeconds(yellowDuration);
+                
+                // Р—РµР»С‘РЅС‹Р№ РЅР° СѓРєР°Р·Р°РЅРЅСѓСЋ РґР»РёС‚РµР»СЊРЅРѕСЃС‚СЊ
+                float greenTime = greenDuration > 0 ? greenDuration : 5f;
+                light.SwitchToColor(TrafficLightViewer.LightColor.Green);
+                yield return new WaitForSeconds(greenTime);
+                
+                // РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРё РІ РєСЂР°СЃРЅС‹Р№
+                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
+                break;
+                
+            case "YELLOW":
+                light.SwitchToColor(TrafficLightViewer.LightColor.Yellow);
+                yield return new WaitForSeconds(yellowDuration);
+                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
+                break;
+                
+            case "RED":
+            default:
+                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
                 break;
         }
+
+        isTransitioning = false;
     }
 
     IEnumerator NetworkTransitionRoutine(IntersectionPhase yellowPhase, IntersectionPhase finalPhase)

@@ -93,6 +93,9 @@ public class EdgeVisionCamera : MonoBehaviour
         }
     }
 
+    private float roiUpdateTimer = 0f;
+    private const float ROI_UPDATE_INTERVAL = 0.1f; // Update ROI lines 10 times per second instead of every frame
+    
     void Update()
     {
         // 1. Если активирован режим редактирования — ловим мышь
@@ -108,8 +111,13 @@ public class EdgeVisionCamera : MonoBehaviour
             }
         }
 
-        // 2. Обновляем позиции LineRenderer каждый кадр (для плавного изменения на лету)
-        UpdateRoiLines();
+        // 2. Update ROI lines less frequently - only every 0.1s
+        roiUpdateTimer += Time.deltaTime;
+        if (roiUpdateTimer >= ROI_UPDATE_INTERVAL)
+        {
+            roiUpdateTimer = 0f;
+            UpdateRoiLines();
+        }
     }
 
     private void HandleInGameRoiEditing()
@@ -117,7 +125,7 @@ public class EdgeVisionCamera : MonoBehaviour
         if (targetCamera == null) return;
 
         // Переводим позицию курсора в нормализованные координаты Viewport (от 0 до 1)
-        Vector2 mouseViewportPos = targetCamera.ScreenToViewportPoint(Input.mousePosition);
+        Vector2 mouseViewportPos = targetCamera.ScreenToViewportPoint(Input.mousePosition); 
 
         // ЛКМ зажата: ищем ближайшую точку для захвата
         if (Input.GetMouseButtonDown(0))
@@ -326,19 +334,33 @@ public class EdgeVisionCamera : MonoBehaviour
 
     private void UpdateBoxVisuals()
     {
+        // Only update visuals if count changed
+        int activeCount = Mathf.Min(detectedBoxes.Count, boxPool.Count);
+        
         for (int i = 0; i < boxPool.Count; i++)
         {
-            if (i < detectedBoxes.Count)
+            if (i < activeCount)
             {
-                boxPool[i].gameObject.SetActive(true);
+                if (!boxPool[i].gameObject.activeSelf)
+                {
+                    boxPool[i].gameObject.SetActive(true);
+                }
+                
                 BoundingBox box = detectedBoxes[i];
-
-                boxPool[i].anchorMin = new Vector2(box.xCenter - box.width / 2f, box.yCenter - box.height / 2f);
-                boxPool[i].anchorMax = new Vector2(box.xCenter + box.width / 2f, box.yCenter + box.height / 2f);
-                boxPool[i].offsetMin = Vector2.zero;
-                boxPool[i].offsetMax = Vector2.zero;
+                // Only update if significantly changed
+                Vector2 newAnchorMin = new Vector2(box.xCenter - box.width / 2f, box.yCenter - box.height / 2f);
+                Vector2 newAnchorMax = new Vector2(box.xCenter + box.width / 2f, box.yCenter + box.height / 2f);
+                
+                if (Vector2.Distance(boxPool[i].anchorMin, newAnchorMin) > 0.001f ||
+                    Vector2.Distance(boxPool[i].anchorMax, newAnchorMax) > 0.001f)
+                {
+                    boxPool[i].anchorMin = newAnchorMin;
+                    boxPool[i].anchorMax = newAnchorMax;
+                    boxPool[i].offsetMin = Vector2.zero;
+                    boxPool[i].offsetMax = Vector2.zero;
+                }
             }
-            else
+            else if (boxPool[i].gameObject.activeSelf)
             {
                 boxPool[i].gameObject.SetActive(false);
             }

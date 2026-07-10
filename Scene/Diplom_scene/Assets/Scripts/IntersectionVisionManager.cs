@@ -6,23 +6,24 @@ using UnityEngine.Networking;
 
 public class IntersectionVisionManager : MonoBehaviour
 {
-    [Header("Связь с контроллером светофоров")]
-    [SerializeField] private IntersectionManager trafficLightController;
+    [Header("РЎРІСЏР·СЊ СЃ РєРѕРЅС‚СЂРѕР»Р»РµСЂРѕРј РїРµСЂРµРєСЂС‘СЃС‚РєР°")]
+    [SerializeField] private IntersectionManager intersectionController;
 
-    [Header("Уникальный ID перекрестка")]
+    [Header("РЈРЅРёРєР°Р»СЊРЅС‹Р№ ID РїРµСЂРµРєСЂРµСЃС‚РєР°")]
     public string intersectionId = "intersection_1";
 
-    [Header("Настройки ИИ")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РР")]
     public ModelAsset sharedYoloModel;
-    public float globalDetectionInterval = 0.2f;
+    public float globalDetectionInterval = 0.5f; // Increased from 0.2s to reduce CPU load
+    public bool enableDebugLogs = false; // Set to true to see debug messages
 
-    [Header("Камеры, контролирующие Ось X")]
+    [Header("РљР°РјРµСЂС‹, РєРѕРЅС‚СЂРѕР»РёСЂСѓСЋС‰РёРµ РћСЃСЊ X")]
     public List<EdgeVisionCamera> xAxisCameras = new List<EdgeVisionCamera>();
 
-    [Header("Камеры, контролирующие Ось Z")]
+    [Header("РљР°РјРµСЂС‹, РєРѕРЅС‚СЂРѕР»РёСЂСѓСЋС‰РёРµ РћСЃСЊ Z")]
     public List<EdgeVisionCamera> zAxisCameras = new List<EdgeVisionCamera>();
 
-    [Header("Сетевой шлюз (FastAPI)")]
+    [Header("РЎРµС‚РµРІРѕР№ С€Р»СЋР· (FastAPI)")]
     public string telemetryUrl = "http://127.0.0.1:8050/api/v1/telemetry";
 
     private Worker sharedEngine;
@@ -34,6 +35,7 @@ public class IntersectionVisionManager : MonoBehaviour
         public string lane_id;
         public int car_count;
         public float avg_speed;
+        public int max_capacity;
     }
 
     [System.Serializable]
@@ -48,62 +50,85 @@ public class IntersectionVisionManager : MonoBehaviour
     private class BackendResponseDTO
     {
         public string target_phase;
+        public float green_duration;
         public bool cascade_applied;
     }
 
     void Start()
     {
-        if (trafficLightController == null)
+        if (intersectionController == null)
         {
-            trafficLightController = GetComponent<IntersectionManager>();
+            intersectionController = GetComponent<IntersectionManager>();
         }
 
         if (sharedYoloModel == null) return;
 
         Model runtimeModel = ModelLoader.Load(sharedYoloModel);
         sharedEngine = new Worker(runtimeModel, BackendType.GPUCompute);
+        
+        // Keep original 1280x1280 as required by the model
         sharedInputTensor = new Tensor<float>(new TensorShape(1, 3, 1280, 1280));
 
         StartCoroutine(CentralizedInferenceLoop());
     }
 
+    private Coroutine inferenceCoroutine;
+    private bool isProcessing = false;
+    
     IEnumerator CentralizedInferenceLoop()
     {
         while (true)
         {
-            List<LaneDetectionDTO> lanesList = new List<LaneDetectionDTO>();
-
-            // Опрашиваем все назначенные камеры для оси X
-            for (int i = 0; i < xAxisCameras.Count; i++)
+            if (!isProcessing)
             {
-                if (xAxisCameras[i] != null)
+                isProcessing = true;
+                
+                try
                 {
-                    lanesList.Add(new LaneDetectionDTO
+                    // РћСЃСЊ X -> РїРѕРґС…РѕРґС‹ 0, 1
+                    for (int i = 0; i < xAxisCameras.Count; i++)
                     {
-                        lane_id = $"lane_{intersectionId}_X_{i}",
-                        car_count = ProcessSingleCamera(xAxisCameras[i]),
-                        avg_speed = 0f
-                    });
-                }
-            }
+                        if (xAxisCameras[i] != null)
+                        {
+                            int carCount = ProcessSingleCamera(xAxisCameras[i]);
+                            
+                            if (enableDebugLogs)
+                                Debug.Log($"[{intersectionId}] Camera {i} detected {carCount} cars");
+                            
+                            StartCoroutine(SendSingleCameraTelemetry(
+                                $"{intersectionId}_approach_{i}",
+                                carCount,
+                                xAxisCameras[i].maxZoneCapacity
+                            ));
+                        }
+                    }
 
-            // Опрашиваем все назначенные камеры для оси Z
-            for (int i = 0; i < zAxisCameras.Count; i++)
-            {
-                if (zAxisCameras[i] != null)
+                    // РћСЃСЊ Z -> РїРѕРґС…РѕРґС‹ 2, 3
+                    for (int i = 0; i < zAxisCameras.Count; i++)
+                    {
+                        if (zAxisCameras[i] != null)
+                        {
+                            int carCount = ProcessSingleCamera(zAxisCameras[i]);
+                            
+                            if (enableDebugLogs)
+                                Debug.Log($"[{intersectionId}] Camera {i+2} detected {carCount} cars");
+                            
+                            StartCoroutine(SendSingleCameraTelemetry(
+                                $"{intersectionId}_approach_{i + 2}",
+                                carCount,
+                                zAxisCameras[i].maxZoneCapacity
+                            ));
+                        }
+                    }
+                }
+                catch (System.Exception ex)
                 {
-                    lanesList.Add(new LaneDetectionDTO
-                    {
-                        lane_id = $"lane_{intersectionId}_Z_{i}",
-                        car_count = ProcessSingleCamera(zAxisCameras[i]),
-                        avg_speed = 0f
-                    });
+                    Debug.LogError($"[{intersectionId}] Inference error: {ex.Message}");
                 }
-            }
-
-            if (lanesList.Count > 0)
-            {
-                StartCoroutine(SendCombinedTelemetry(lanesList));
+                finally
+                {
+                    isProcessing = false;
+                }
             }
 
             yield return new WaitForSeconds(globalDetectionInterval);
@@ -113,6 +138,8 @@ public class IntersectionVisionManager : MonoBehaviour
     int ProcessSingleCamera(EdgeVisionCamera cam)
     {
         if (cam == null) return 0;
+        
+        // Cache RenderTexture to avoid creating new ones
         RenderTexture cameraRt = cam.CaptureFrame();
         if (cameraRt == null) return 0;
 
@@ -120,19 +147,39 @@ public class IntersectionVisionManager : MonoBehaviour
         sharedEngine.Schedule(sharedInputTensor);
 
         Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
-        return cam.UpdateDetectionsAndGetCount(outputTensor);
+        int result = cam.UpdateDetectionsAndGetCount(outputTensor);
+        
+        // Release tensor immediately
+        outputTensor.Dispose();
+        
+        return result;
     }
 
-    IEnumerator SendCombinedTelemetry(List<LaneDetectionDTO> lanes)
+    IEnumerator SendSingleCameraTelemetry(string laneId, int carCount, int maxCapacity)
     {
+        if (enableDebugLogs)
+            Debug.Log($"[{intersectionId}] Sending telemetry for {laneId}: {carCount} cars");
+        
+        // РЎРѕР·РґР°РµРј DTO РґР»СЏ РћР”РќРћР™ РєР°РјРµСЂС‹/РїРѕРґС…РѕРґР°
+        LaneDetectionDTO singleLane = new LaneDetectionDTO
+        {
+            lane_id = laneId,
+            car_count = carCount,
+            avg_speed = 0f,
+            max_capacity = maxCapacity
+        };
+
         IntersectionUpdateDTO payload = new IntersectionUpdateDTO
         {
             intersection_id = intersectionId,
-            camera_id = "central_manager",
-            lanes = lanes
+            camera_id = laneId,
+            lanes = new List<LaneDetectionDTO> { singleLane }
         };
 
         string json = JsonUtility.ToJson(payload);
+        
+        if (enableDebugLogs)
+            Debug.Log($"[{intersectionId}] Payload: {json}");
 
         using (UnityWebRequest request = new UnityWebRequest(telemetryUrl, "POST"))
         {
@@ -140,24 +187,43 @@ public class IntersectionVisionManager : MonoBehaviour
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
+            request.timeout = 5; // 5 second timeout
 
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)
             {
                 string jsonResponse = request.downloadHandler.text;
+                if (enableDebugLogs)
+                    Debug.Log($"[{intersectionId}] Response for {laneId}: {jsonResponse}");
+                
                 try
                 {
                     BackendResponseDTO responseData = JsonUtility.FromJson<BackendResponseDTO>(jsonResponse);
-                    if (responseData != null && trafficLightController != null)
+                    if (responseData != null && intersectionController != null)
                     {
-                        trafficLightController.ReceiveCommandFromPython(responseData.target_phase);
+                        if (enableDebugLogs)
+                            Debug.Log($"[{intersectionId}] Applying command: {responseData.target_phase} for {responseData.green_duration}s");
+                        
+                        intersectionController.ReceiveCommandForLane(
+                            laneId, 
+                            responseData.target_phase,
+                            responseData.green_duration
+                        );
+                    }
+                    else if (enableDebugLogs)
+                    {
+                        Debug.LogWarning($"[{intersectionId}] Null response or controller for {laneId}");
                     }
                 }
                 catch (System.Exception ex)
                 {
-                    Debug.LogError($"[JSON Parse Error] {ex.Message}");
+                    Debug.LogError($"[JSON Parse Error] {ex.Message}\nResponse: {jsonResponse}");
                 }
+            }
+            else
+            {
+                Debug.LogError($"[{intersectionId}] WebRequest failed for {laneId}: {request.error}\nURL: {telemetryUrl}");
             }
         }
     }

@@ -1,51 +1,86 @@
 # backend/services/orchestrator.py
 import json
+from typing import Dict
 from backend.models.traffic import IntersectionUpdateDTO
 from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.graph_manager import traffic_network
+from backend.services.cloud_orchestrator import CloudOrchestrator
 
 
 class TrafficOrchestrator:
-    def __init__(self, ws_manager):
-        self.traffic_brains = {}
+    """
+    Оркестратор: связывает телеметрию от Unity → Fog-мозг → Cloud → Unity (через WS).
+    
+    Архитектура Dubai-style: каждый светофор имеет независимый контроллер.
+    """
+
+    def __init__(self, ws_manager, cloud: CloudOrchestrator = None):
+        # Ключ: lane_id (например "intersection_1_approach_0")
+        self.traffic_brains: Dict[str, AdaptiveTrafficBrain] = {}
         self.ws_manager = ws_manager
+        self.cloud = cloud
 
-    async def handle_telemetry(self, update: IntersectionUpdateDTO):
+    async def handle_telemetry(self, update: IntersectionUpdateDTO) -> dict:
+        """
+        Обработать телеметрию с ОДНОЙ камеры/подхода.
+        Каждый светофор работает независимо, не ждёт свою фазу.
+        """
         inter_id = update.intersection_id
+        camera_id = update.camera_id  # Уникальный ID камеры/подхода
 
-        if inter_id not in self.traffic_brains:
-            self.traffic_brains[inter_id] = AdaptiveTrafficBrain()
+        # 1. Создаём независимый мозг для конкретного светофора, если ещё нет
+        if camera_id not in self.traffic_brains:
+            self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, is_per_lane=True)
+            print(f"🧠 Создан независимый контроллер для {camera_id}")
 
-        brain = self.traffic_brains[inter_id]
-        target_phase = brain.process_telemetry(update)
+        brain = self.traffic_brains[camera_id]
 
+        # 2. Применяем каскадные команды от Cloud, если есть
+        if self.cloud:
+            cascade_commands = self.cloud.get_cascade_commands()
+            for cmd in cascade_commands:
+                if cmd.get("target_intersection") == inter_id:
+                    brain.apply_cascade_command(cmd)
+
+        # 3. Мозг обрабатывает телеметрию и решает команду для этого конкретного светофора
+        target_command, green_duration = brain.process_lane_telemetry(update)
+
+        # 4. Обновляем состояние полосы в графе
+        for lane in update.lanes:
+            traffic_network.update_lane_state(
+                lane_id=lane.lane_id,
+                car_count=lane.car_count,
+                avg_speed=lane.avg_speed,
+                max_capacity=lane.max_capacity,
+            )
+
+        # 5. Собираем состояние для UI
         ui_lanes = []
         for lane in update.lanes:
-            traffic_network.update_lane_congestion(inter_id, lane.lane_id, lane.car_count)
-
-            lane_axis = brain._resolve_lane_axis(lane.lane_id)
-
-            # Зеленый горит на оси Z, если фаза Z_GREEN, или на оси X, если фаза X_GREEN
-            is_green = (lane_axis == "Z" and target_phase == "Z_GREEN") or \
-                       (lane_axis == "X" and target_phase == "X_GREEN")
+            lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
+            load_pct = int(lane_state.get("congestion_index", 0) * 100)
 
             ui_lanes.append({
                 "lane_id": lane.lane_id,
                 "car_count": lane.car_count,
                 "avg_speed": lane.avg_speed,
-                "light": "green" if is_green else "red"
+                "load_pct": load_pct,
+                "light": "unknown",  # Контроллер сам решает
             })
 
-        cascade_actions = traffic_network.get_cascade_commands(inter_id)
-
+        # 6. Шлём состояние в UI через WebSocket
         ui_payload = {
+            "type": "lane_update",
             "intersection_id": inter_id,
-            "current_phase": target_phase,
-            "lanes": ui_lanes
+            "lane_id": camera_id,
+            "command": target_command,
+            "lanes": ui_lanes,
         }
-        await self.ws_manager.broadcast(json.dumps(ui_payload))
+        if self.ws_manager:
+            await self.ws_manager.broadcast(json.dumps(ui_payload))
 
         return {
-            "target_phase": target_phase,
-            "cascade_applied": inter_id in cascade_actions
+            "target_phase": target_command,
+            "green_duration": green_duration,
+            "cascade_applied": False,
         }
