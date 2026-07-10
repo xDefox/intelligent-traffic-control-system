@@ -143,10 +143,11 @@ class AdaptiveTrafficBrain:
             self._phase_start_time = time.time()
             self._min_duration = 5.0  # Сбрасываем минимум
 
-        # Лог
-        print(f"🧠 [{self.intersection_id}] Фаза: {self._current_phase} "
-              f"(прошло: {elapsed:.0f}с, {current_phase}: {current_load:.0%}, "
-              f"{other_phase}: {other_load:.0%})")
+        # Лог только при смене фазы (убрал спам каждые 0.5с)
+        # if needs_switch:
+        #     print(f"🧠 [{self.intersection_id}] Фаза: {self._current_phase} "
+        #           f"(прошло: {elapsed:.0f}с, {current_phase}: {current_load:.0%}, "
+        #           f"{other_phase}: {other_load:.0%})")
 
         return self._current_phase
 
@@ -158,12 +159,14 @@ class AdaptiveTrafficBrain:
             reduce_by = command.get("reduce_green_by", 5)
             # Устанавливаем минимальное время горения фазы меньше
             self._min_duration = max(3.0, 8.0 - reduce_by)
+            # Лог только при ошибках/каскадных командах
             print(f"  ⏱️  {self.intersection_id} -> каскад: зелёный урезан до "
                   f"{self._min_duration:.0f}с ({command.get('reason')})")
 
         elif action == "GREEN_WAVE":
             extend_by = command.get("extend_green_by", 3)
             self._min_duration = 15.0 + extend_by
+            # Лог только при ошибках/каскадных командах
             print(f"  🟢  {self.intersection_id} -> зелёная волна: +{extend_by}с "
                   f"(мин. {self._min_duration:.0f}с)")
 

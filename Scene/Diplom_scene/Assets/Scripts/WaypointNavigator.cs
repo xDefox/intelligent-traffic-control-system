@@ -149,7 +149,8 @@ public class WaypointNavigator : MonoBehaviour
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
-        transform.Translate(Vector3.forward * speed * Time.deltaTime);
+        // Move in the direction of the waypoint (world space) instead of local forward
+        transform.Translate(moveDirection.normalized * speed * Time.deltaTime, Space.World);
 
         if (Vector3.Distance(transform.position, targetWaypoint.position) < 0.6f)
         {
@@ -183,7 +184,7 @@ public class WaypointNavigator : MonoBehaviour
     {
         if (other.CompareTag("StopTrigger"))
         {
-            isOnIntersection = false;
+            isOnIntersection = true;  // FIXED: Was false, should be true when inside trigger
 
             TrafficLightViewer trafficLight = other.GetComponentInParent<TrafficLightViewer>();
             if (trafficLight != null)
@@ -206,7 +207,7 @@ public class WaypointNavigator : MonoBehaviour
         if (other.CompareTag("StopTrigger"))
         {
             isStoppedByLight = false;
-            isOnIntersection = true;
+            isOnIntersection = false;  // FIXED: Was true, should be false when exiting trigger
         }
     }
 }
