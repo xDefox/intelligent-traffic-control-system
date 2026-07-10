@@ -119,8 +119,6 @@ class TrafficUIFactory:
             lanes_layout = ft.Column(spacing=15)
             self.intersection_lanes_layout[inter_id] = lanes_layout
 
-            # Тот самый единый контейнер под весь перекрёсток
-            # Тот самый единый контейнер под весь перекрёсток
             inter_container = ft.Container(
                 content=ft.Column([
                     self.intersection_headers[inter_id],
@@ -130,7 +128,6 @@ class TrafficUIFactory:
                 bgcolor="#23272A",
                 padding=20,
                 border_radius=12,
-                # Абсолютно неубиваемый способ отрисовки рамки для всех версий Flet:
                 border=ft.border.Border(
                     top=ft.border.BorderSide(1, "blueaccent"),
                     bottom=ft.border.BorderSide(1, "blueaccent"),
@@ -142,6 +139,11 @@ class TrafficUIFactory:
             self.intersection_containers[inter_id] = inter_container
             self.grid.controls.append(inter_container)
             structure_changed = True
+
+            # Добавляем новый перекрёсток в выпадающий список (не сбрасывая выбор пользователя)
+            current_val = self.filter_dropdown.value
+            self.filter_dropdown.options.append(ft.dropdown.Option(inter_id))
+            self.filter_dropdown.value = current_val
         else:
             self.intersection_headers[
                 inter_id].value = f"🛑 Перекрёсток: {inter_id.upper()} | Текущая фаза: {current_phase}"
@@ -185,24 +187,7 @@ class TrafficUIFactory:
                 lanes_layout.controls.append(ft.Row(belonging_cards[i:i + 2], spacing=15))
             structure_changed = True
 
-        # 4. Финальное обновление интерфейса
-        if structure_changed:
-            # КРИТИЧЕСКИ ВАЖНО: Сохраняем то, что пользователь уже выбрал руками
-            current_val = self.filter_dropdown.value
-
-            options = [ft.dropdown.Option("Все перекрёстки")]
-            for existing_id in sorted(self.intersection_containers.keys()):
-                options.append(ft.dropdown.Option(existing_id))
-
-            self.filter_dropdown.options = options
-
-            # Принудительно возвращаем выбранное значение назад в Dropdown после перезаписи options
-            # Если старого значения больше нет в списке (хотя оно должно быть), откатываемся на "Все перекрёстки"
-            valid_keys = [opt.key for opt in options if opt.key]
-            self.filter_dropdown.value = current_val if current_val in valid_keys else "Все перекрёстки"
-
-            # ВАЖНО: Применяем фильтр ВЫБОРКИ ВСЕГДА (на каждый пришедший пакет данных от тика симуляции).
-            # Метод apply_filter сам вызовет self.page.update(), так что дублировать его ниже не нужно.
+        # 4. Применяем фильтр (без пересборки options — они обновляются только при появлении нового перекрёстка)
         self.apply_filter()
 
     def apply_filter(self):

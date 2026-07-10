@@ -41,7 +41,7 @@ async def receive_telemetry(update: IntersectionUpdateDTO):
     result = await orchestrator.handle_telemetry(update)
     return {
         "status": "processed",
-        "current_phase": result["target_phase"],
+        "target_phase": result["target_phase"],
         "cascade_applied": result["cascade_applied"]
     }
 

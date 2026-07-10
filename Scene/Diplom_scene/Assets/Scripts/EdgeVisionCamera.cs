@@ -38,7 +38,7 @@ public class EdgeVisionCamera : MonoBehaviour
 
     [Header("Интерактив в игре")]
     [Tooltip("Включите, чтобы перетаскивать точки ROI мышкой прямо в окне Game")]
-    public bool editRoiInGame = true;
+    public bool editRoiInGame = false;
     private int selectedPointIndex = -1;
 
     private LineRenderer roiLineRenderer;
@@ -98,7 +98,14 @@ public class EdgeVisionCamera : MonoBehaviour
         // 1. Если активирован режим редактирования — ловим мышь
         if (editRoiInGame)
         {
-            HandleInGameRoiEditing();
+            try
+            {
+                HandleInGameRoiEditing();
+            }
+            catch (System.InvalidOperationException)
+            {
+                // Игнорируем ошибки старого Input при использовании Input System Package
+            }
         }
 
         // 2. Обновляем позиции LineRenderer каждый кадр (для плавного изменения на лету)
