@@ -78,6 +78,7 @@ class TrafficOrchestrator:
         3. Сразу возвращаем ответы (без цикла по handle_telemetry!)
         """
         inter_id = batch.intersection_id
+        print(f"📥 [{inter_id}] Получен batch: {len(batch.cameras)} камер")
         
         # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
         for cam in batch.cameras:
@@ -118,6 +119,8 @@ class TrafficOrchestrator:
             if lane_phase in phase_cars:
                 phase_cars[lane_phase] += data["car_count"]
         
+        print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
+        
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)
             if phase_names:
@@ -133,6 +136,8 @@ class TrafficOrchestrator:
             opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
             this = phase_cars.get(active_phase, 0)
             other = phase_cars.get(opposite, 0)
+            
+            print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
             
             # Условие 1: на этой фазе нет машин, на другой есть → переключаем
             if elapsed >= phase_state["min_duration"] and this == 0 and other > 0:
@@ -194,4 +199,5 @@ class TrafficOrchestrator:
             if self.ws_manager:
                 await self.ws_manager.broadcast(json.dumps(ui_payload))
 
+        print(f"  📤 [{inter_id}] Ответ: {active_phase} на {green_duration:.1f}с для {len([r for r in responses if r.target_phase == 'GREEN'])} зелёных")
         return responses

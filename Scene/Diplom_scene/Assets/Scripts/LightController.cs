@@ -158,18 +158,30 @@ public class IntersectionManager : MonoBehaviour
 
         AxisState currentState = isXAxis ? xAxisState : zAxisState;
 
-        // Если та же ось уже зелёная — просто продлеваем зелёный
+        // Если та же ось уже зелёная — продлеваем и выключаем противоположную
         if (currentState == AxisState.Green)
         {
+            // ВСЕГДА выключаем противоположную ось
+            SetLightsState(oppositeAxis, oppositeColor);
+            if (isXAxis)
+            {
+                zAxisState = AxisState.Red;
+            }
+            else
+            {
+                xAxisState = AxisState.Red;
+            }
+            
+            // Продлеваем зелёный
             if (isXAxis)
             {
                 xGreenRemaining = Mathf.Max(xGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
-                Debug.Log($"[IntersectionManager] X-axis зелёный продлён: +{greenDuration}с");
+                Debug.Log($"[IntersectionManager] X-axis зелёный продлён: +{greenDuration}с (Z выключен)");
             }
             else
             {
                 zGreenRemaining = Mathf.Max(zGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
-                Debug.Log($"[IntersectionManager] Z-axis зелёный продлён: +{greenDuration}с");
+                Debug.Log($"[IntersectionManager] Z-axis зелёный продлён: +{greenDuration}с (X выключен)");
             }
             if (isXAxis) xIsTransitioning = false;
             else zIsTransitioning = false;

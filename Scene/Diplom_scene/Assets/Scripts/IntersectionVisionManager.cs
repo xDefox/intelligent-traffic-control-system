@@ -10,8 +10,11 @@ public class IntersectionVisionManager : MonoBehaviour
     [Header("Связь с контроллером перекрёстка")]
     [SerializeField] private IntersectionManager intersectionController;
 
-    [Header("Уникальный ID перекрестка")]
-    public string intersectionId = "intersection_1";
+    [Header("Уникальный ID перекрестка (автоматически определяется из имени GameObject)")]
+    public string intersectionId = "";
+    
+    [Header("Автоматически генерировать ID из имени GameObject")]
+    public bool autoGenerateIdFromName = true;
 
     [Header("Настройки ИИ")]
     public ModelAsset sharedYoloModel;
@@ -59,12 +62,24 @@ public class IntersectionVisionManager : MonoBehaviour
 
     void Start()
     {
+        // Автоматически определяем ID перекрёстка из имени GameObject
+        if (autoGenerateIdFromName || string.IsNullOrEmpty(intersectionId))
+        {
+            intersectionId = ExtractIntersectionIdFromName(gameObject.name);
+        }
+        
+        Debug.Log($"[{gameObject.name}] 🚦 IntersectionVisionManager запущен: ID={intersectionId}, Камер={xAxisCameras.Count + zAxisCameras.Count}");
+        
         if (intersectionController == null)
         {
             intersectionController = GetComponent<IntersectionManager>();
         }
 
-        if (sharedYoloModel == null) return;
+        if (sharedYoloModel == null) 
+        {
+            Debug.LogWarning($"[{gameObject.name}] ⚠️ YOLO модель не назначена!");
+            return;
+        }
 
         Model runtimeModel = ModelLoader.Load(sharedYoloModel);
         sharedEngine = new Worker(runtimeModel, BackendType.GPUCompute);
@@ -76,6 +91,7 @@ public class IntersectionVisionManager : MonoBehaviour
         allCameras.AddRange(zAxisCameras);
         cameraResults = new int[allCameras.Count];
 
+        Debug.Log($"[{gameObject.name}] ✅ Запуск inference loop: {allCameras.Count} камер, ID={intersectionId}");
         StartCoroutine(CentralizedInferenceLoop());
     }
 
@@ -247,6 +263,40 @@ public class IntersectionVisionManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Автоматически извлекает ID перекрёстка из имени GameObject.
+    /// Поддерживает форматы: "intersection_1", "Intersection 2", "TrafficLight_3", etc.
+    /// </summary>
+    private string ExtractIntersectionIdFromName(string gameObjectName)
+    {
+        // Приводим к нижнему регистру для универсальности
+        string name = gameObjectName.ToLower();
+        
+        // Извлекаем номер из конца имени (например, "manager2" -> "2")
+        System.Text.RegularExpressions.Regex numberRegex = new System.Text.RegularExpressions.Regex(@"(\d+)$");
+        var numberMatch = numberRegex.Match(name.Replace(" ", ""));
+        
+        string number = "1"; // По умолчанию номер 1
+        if (numberMatch.Success)
+        {
+            number = numberMatch.Groups[1].Value;
+        }
+        
+        // Проверяем содержит ли имя слово intersection/traffic/crossroad
+        System.Text.RegularExpressions.Regex typeRegex = new System.Text.RegularExpressions.Regex(@"(intersection|traffic|crossroad)");
+        var typeMatch = typeRegex.Match(name);
+        
+        if (typeMatch.Success)
+        {
+            // Если содержит - используем этот тип и номер
+            string type = typeMatch.Groups[1].Value;
+            return $"{type}_{number}";
+        }
+        
+        // Если паттерн не найден, используем имя как есть, заменив пробелы на _
+        return "intersection_" + gameObjectName.Replace(" ", "_").ToLower();
+    }
+    
     // Вспомогательные классы
 
     [System.Serializable]
