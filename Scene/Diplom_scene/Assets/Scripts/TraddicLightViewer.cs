@@ -2,44 +2,59 @@ using UnityEngine;
 
 public class TrafficLightViewer : MonoBehaviour
 {
-    [Header("Сферы сигналов")]
+    [Header("РЎС„РµСЂС‹ СЃРёРіРЅР°Р»РѕРІ")]
     public MeshRenderer redLight;
     public MeshRenderer yellowLight;
     public MeshRenderer greenLight;
 
-    [Header("Цвета свечения (HDR)")]
+    [Header("Р¦РІРµС‚Р° СЃРІРµС‡РµРЅРёСЏ (HDR)")]
     [ColorUsage(true, true)] public Color redEmission = Color.red;
     [ColorUsage(true, true)] public Color yellowEmission = Color.yellow;
     [ColorUsage(true, true)] public Color greenEmission = Color.green;
 
     public enum LightColor { Red, Yellow, Green }
     private LightColor currentLight = LightColor.Red;
+    
+    // Cache materials to avoid creating instances
+    private Material redMat;
+    private Material yellowMat;
+    private Material greenMat;
 
     public LightColor GetCurrentLight() => currentLight;
 
-    // Этот метод теперь вызывается из главного менеджера перекрестка
+    void Start()
+    {
+        // Cache materials once at startup
+        if (redLight != null) redMat = redLight.material;
+        if (yellowLight != null) yellowMat = yellowLight.material;
+        if (greenLight != null) greenMat = greenLight.material;
+    }
+
+    // Р­С‚РѕС‚ РјРµС‚РѕРґ С‚РµРїРµСЂСЊ РІС‹Р·С‹РІР°РµС‚СЃСЏ РёР· РіР»Р°РІРЅРѕРіРѕ РјРµРЅРµРґР¶РµСЂР° РїРµСЂРµРєСЂРµСЃС‚РєР°
     public void SwitchToColor(LightColor newColor)
     {
+        if (newColor == currentLight) return; // Skip if same color
+        
         currentLight = newColor;
 
-        // Гасим все
-        SetEmission(redLight, false, Color.black);
-        SetEmission(yellowLight, false, Color.black);
-        SetEmission(greenLight, false, Color.black);
+        // Р“Р°СЃРёРј РІСЃРµ
+        SetEmission(redMat, false, Color.black);
+        SetEmission(yellowMat, false, Color.black);
+        SetEmission(greenMat, false, Color.black);
 
-        // Зажигаем нужный
+        // Р—Р°Р¶РёРіР°РµРј РЅСѓР¶РЅС‹Р№
         switch (currentLight)
         {
-            case LightColor.Red: SetEmission(redLight, true, redEmission); break;
-            case LightColor.Yellow: SetEmission(yellowLight, true, yellowEmission); break;
-            case LightColor.Green: SetEmission(greenLight, true, greenEmission); break;
+            case LightColor.Red: SetEmission(redMat, true, redEmission); break;
+            case LightColor.Yellow: SetEmission(yellowMat, true, yellowEmission); break;
+            case LightColor.Green: SetEmission(greenMat, true, greenEmission); break;
         }
     }
 
-    private void SetEmission(MeshRenderer renderer, bool isOn, Color color)
+    private void SetEmission(Material mat, bool isOn, Color color)
     {
-        if (renderer == null) return;
-        Material mat = renderer.material;
+        if (mat == null) return;
+        
         if (isOn)
         {
             mat.EnableKeyword("_EMISSION");

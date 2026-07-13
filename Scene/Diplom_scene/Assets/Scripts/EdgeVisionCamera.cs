@@ -93,6 +93,9 @@ public class EdgeVisionCamera : MonoBehaviour
         }
     }
 
+    private float roiUpdateTimer = 0f;
+    private const float ROI_UPDATE_INTERVAL = 0.1f; // Update ROI lines 10 times per second instead of every frame
+    
     void Update()
     {
         // 1. Если активирован режим редактирования — ловим мышь
@@ -108,8 +111,13 @@ public class EdgeVisionCamera : MonoBehaviour
             }
         }
 
-        // 2. Обновляем позиции LineRenderer каждый кадр (для плавного изменения на лету)
-        UpdateRoiLines();
+        // 2. Update ROI lines less frequently - only every 0.1s
+        roiUpdateTimer += Time.deltaTime;
+        if (roiUpdateTimer >= ROI_UPDATE_INTERVAL)
+        {
+            roiUpdateTimer = 0f;
+            UpdateRoiLines();
+        }
     }
 
     private void HandleInGameRoiEditing()
@@ -117,7 +125,7 @@ public class EdgeVisionCamera : MonoBehaviour
         if (targetCamera == null) return;
 
         // Переводим позицию курсора в нормализованные координаты Viewport (от 0 до 1)
-        Vector2 mouseViewportPos = targetCamera.ScreenToViewportPoint(Input.mousePosition);
+        Vector2 mouseViewportPos = targetCamera.ScreenToViewportPoint(Input.mousePosition); 
 
         // ЛКМ зажата: ищем ближайшую точку для захвата
         if (Input.GetMouseButtonDown(0))
@@ -204,108 +212,144 @@ public class EdgeVisionCamera : MonoBehaviour
         return rt;
     }
 
+    public void ReleaseFrame()
+    {
+        // RenderTexture не уничтожаем — он переиспользуется.
+        // Просто сбрасываем targetTexture, если вдруг что-то осталось.
+        if (targetCamera != null)
+        {
+            targetCamera.targetTexture = null;
+        }
+    }
+
     public int UpdateDetectionsAndGetCount(Tensor<float> output)
     {
         if (output == null) return 0;
 
-        List<BoundingBox> candidates = new List<BoundingBox>();
         output.CompleteAllPendingOperations();
 
+        // Оптимизация: фильтруем анкоры во время копирования с GPU,
+        // чтобы не создавать List<BoundingBox> для 8400 кандидатов, если детекций мало.
         using (Tensor<float> cpuOutput = output.ReadbackAndClone() as Tensor<float>)
         {
             int numAnchors = (cpuOutput.shape[2] > cpuOutput.shape[1]) ? cpuOutput.shape[2] : cpuOutput.shape[1];
             bool isTransposed = cpuOutput.shape[1] == numAnchors;
 
+            // Избегаем аллокаций в цикле — сразу кладём прошедшие фильтр
+            // Используем capacity hint для снижения переаллокаций
+            int estimatedCandidates = Mathf.Min(200, numAnchors / 10);
+            List<BoundingBox> candidates = new List<BoundingBox>(estimatedCandidates);
+
+            // Предзагружаем константы, чтобы не считать их в цикле
+            float inv1280 = 1f / 1280f;
+
             for (int i = 0; i < numAnchors; i++)
             {
-                float maxScore = 0;
-                foreach (int classId in vehicleClassIds)
+                // Ранний выход: быстрая проверка confidence
+                float maxScore = cpuOutput[isTransposed ? 0 : 0,
+                                              isTransposed ? i : 4,
+                                              isTransposed ? 4 : i];
+
+                // Если первый класс не прошёл — проверяем остальные
+                if (maxScore <= confidenceThreshold)
                 {
-                    float score = isTransposed ? cpuOutput[0, i, 4 + classId] : cpuOutput[0, 4 + classId, i];
-                    if (score > maxScore) maxScore = score;
-                }
-
-                if (maxScore > confidenceThreshold)
-                {
-                    float rawX = isTransposed ? cpuOutput[0, i, 0] : cpuOutput[0, 0, i];
-                    float rawY = isTransposed ? cpuOutput[0, i, 1] : cpuOutput[0, 1, i];
-                    float rawW = isTransposed ? cpuOutput[0, i, 2] : cpuOutput[0, 2, i];
-                    float rawH = isTransposed ? cpuOutput[0, i, 3] : cpuOutput[0, 3, i];
-
-                    bool modelOutputsPixels = (rawX > 1.5f);
-                    float normX = modelOutputsPixels ? rawX / 1280f : rawX;
-                    float normY = modelOutputsPixels ? rawY / 1280f : rawY;
-                    float normW = modelOutputsPixels ? rawW / 1280f : rawW;
-                    float normH = modelOutputsPixels ? rawH / 1280f : rawH;
-
-                    normX = Mathf.Clamp01(normX);
-                    normY = Mathf.Clamp01(normY);
-                    normW = Mathf.Clamp01(normW);
-                    normH = Mathf.Clamp01(normH);
-
-                    float unityY = 1f - normY;
-                    Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
-
-                    if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
+                    foreach (int classId in vehicleClassIds)
                     {
-                        candidates.Add(new BoundingBox { xCenter = normX, yCenter = unityY, width = normW, height = normH, confidence = maxScore });
+                        if (classId == 0) continue; // уже проверили
+                        float score = isTransposed ? cpuOutput[0, i, 4 + classId] : cpuOutput[0, 4 + classId, i];
+                        if (score > maxScore) maxScore = score;
                     }
                 }
+
+                if (maxScore <= confidenceThreshold)
+                    continue;
+
+                // Извлекаем координаты
+                float rawX = isTransposed ? cpuOutput[0, i, 0] : cpuOutput[0, 0, i];
+                float rawY = isTransposed ? cpuOutput[0, i, 1] : cpuOutput[0, 1, i];
+                float rawW = isTransposed ? cpuOutput[0, i, 2] : cpuOutput[0, 2, i];
+                float rawH = isTransposed ? cpuOutput[0, i, 3] : cpuOutput[0, 3, i];
+
+                bool modelOutputsPixels = (rawX > 1.5f);
+
+                float normX = modelOutputsPixels ? rawX * inv1280 : rawX;
+                float normY = modelOutputsPixels ? rawY * inv1280 : rawY;
+                float normW = modelOutputsPixels ? rawW * inv1280 : rawW;
+                float normH = modelOutputsPixels ? rawH * inv1280 : rawH;
+
+                normX = Mathf.Clamp01(normX);
+                normY = Mathf.Clamp01(normY);
+                normW = Mathf.Clamp01(normW);
+                normH = Mathf.Clamp01(normH);
+
+                float unityY = 1f - normY;
+                Vector2 centerPointNormalizedUnity = new Vector2(normX, unityY);
+
+                // ROI check — быстрый отсев до создания объекта
+                if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
+                {
+                    candidates.Add(new BoundingBox { xCenter = normX, yCenter = unityY, width = normW, height = normH, confidence = maxScore });
+                }
             }
+
+            detectedBoxes = ApplyNmsOptimized(candidates, iouThreshold);
         }
 
-        detectedBoxes = ApplyNMS(candidates, iouThreshold);
         UpdateBoxVisuals();
-
         return detectedBoxes.Count;
     }
 
-    private List<BoundingBox> ApplyNMS(List<BoundingBox> boxes, float iouThresh)
+    /// <summary>
+    /// Оптимизированная NMS: предварительная сортировка + ранний выход
+    /// при малом количестве детекций.
+    /// </summary>
+    private List<BoundingBox> ApplyNmsOptimized(List<BoundingBox> boxes, float iouThresh)
     {
+        if (boxes.Count == 0) return new List<BoundingBox>();
+        if (boxes.Count == 1) return new List<BoundingBox> { boxes[0] };
+
+        // Сортируем по confidence (убывание)
         boxes.Sort((a, b) => b.confidence.CompareTo(a.confidence));
-        List<BoundingBox> result = new List<BoundingBox>();
+
+        List<BoundingBox> result = new List<BoundingBox>(Mathf.Min(boxes.Count, 20));
         bool[] suppressed = new bool[boxes.Count];
 
         for (int i = 0; i < boxes.Count; i++)
         {
             if (suppressed[i]) continue;
-            BoundingBox baseBox = boxes[i];
-            result.Add(baseBox);
+            result.Add(boxes[i]);
 
             for (int j = i + 1; j < boxes.Count; j++)
             {
                 if (suppressed[j]) continue;
-                if (CalculateIoU(boxes[i], boxes[j]) > iouThresh)
+                if (ComputeIoU(boxes[i], boxes[j]) > iouThresh)
                 {
                     suppressed[j] = true;
                 }
             }
         }
+
         return result;
     }
 
-    private float CalculateIoU(BoundingBox boxA, BoundingBox boxB)
+    /// <summary>
+    /// Оптимизированное вычисление IoU: без промежуточных переменных.
+    /// </summary>
+    private float ComputeIoU(BoundingBox a, BoundingBox b)
     {
-        float leftA = boxA.xCenter - boxA.width / 2f;
-        float rightA = boxA.xCenter + boxA.width / 2f;
-        float topA = boxA.yCenter + boxA.height / 2f;
-        float bottomA = boxA.yCenter - boxA.height / 2f;
+        float left = Mathf.Max(a.xCenter - a.width * 0.5f, b.xCenter - b.width * 0.5f);
+        float right = Mathf.Min(a.xCenter + a.width * 0.5f, b.xCenter + b.width * 0.5f);
 
-        float leftB = boxB.xCenter - boxB.width / 2f;
-        float rightB = boxB.xCenter + boxB.width / 2f;
-        float topB = boxB.yCenter + boxB.height / 2f;
-        float bottomB = boxB.yCenter - boxB.height / 2f;
+        if (left >= right) return 0f;
 
-        float interLeft = Mathf.Max(leftA, leftB);
-        float interRight = Mathf.Min(rightA, rightB);
-        float interTop = Mathf.Min(topA, topB);
-        float interBottom = Mathf.Max(bottomA, bottomB);
+        float top = Mathf.Min(a.yCenter + a.height * 0.5f, b.yCenter + b.height * 0.5f);
+        float bottom = Mathf.Max(a.yCenter - a.height * 0.5f, b.yCenter - b.height * 0.5f);
 
-        if (interLeft >= interRight || interBottom >= interTop) return 0f;
+        if (bottom >= top) return 0f;
 
-        float interArea = (interRight - interLeft) * (interTop - interBottom);
-        float areaA = boxA.width * boxA.height;
-        float areaB = boxB.width * boxB.height;
+        float interArea = (right - left) * (top - bottom);
+        float areaA = a.width * a.height;
+        float areaB = b.width * b.height;
 
         return interArea / (areaA + areaB - interArea);
     }
@@ -326,19 +370,33 @@ public class EdgeVisionCamera : MonoBehaviour
 
     private void UpdateBoxVisuals()
     {
+        // Only update visuals if count changed
+        int activeCount = Mathf.Min(detectedBoxes.Count, boxPool.Count);
+        
         for (int i = 0; i < boxPool.Count; i++)
         {
-            if (i < detectedBoxes.Count)
+            if (i < activeCount)
             {
-                boxPool[i].gameObject.SetActive(true);
+                if (!boxPool[i].gameObject.activeSelf)
+                {
+                    boxPool[i].gameObject.SetActive(true);
+                }
+                
                 BoundingBox box = detectedBoxes[i];
-
-                boxPool[i].anchorMin = new Vector2(box.xCenter - box.width / 2f, box.yCenter - box.height / 2f);
-                boxPool[i].anchorMax = new Vector2(box.xCenter + box.width / 2f, box.yCenter + box.height / 2f);
-                boxPool[i].offsetMin = Vector2.zero;
-                boxPool[i].offsetMax = Vector2.zero;
+                // Only update if significantly changed
+                Vector2 newAnchorMin = new Vector2(box.xCenter - box.width / 2f, box.yCenter - box.height / 2f);
+                Vector2 newAnchorMax = new Vector2(box.xCenter + box.width / 2f, box.yCenter + box.height / 2f);
+                
+                if (Vector2.Distance(boxPool[i].anchorMin, newAnchorMin) > 0.001f ||
+                    Vector2.Distance(boxPool[i].anchorMax, newAnchorMax) > 0.001f)
+                {
+                    boxPool[i].anchorMin = newAnchorMin;
+                    boxPool[i].anchorMax = newAnchorMax;
+                    boxPool[i].offsetMin = Vector2.zero;
+                    boxPool[i].offsetMax = Vector2.zero;
+                }
             }
-            else
+            else if (boxPool[i].gameObject.activeSelf)
             {
                 boxPool[i].gameObject.SetActive(false);
             }

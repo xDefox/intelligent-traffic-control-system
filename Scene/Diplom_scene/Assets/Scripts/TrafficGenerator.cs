@@ -7,26 +7,28 @@ public class TrafficGenerator : MonoBehaviour
     public struct SpawnRoute
     {
         public string name;
-        [Tooltip("Точка, где физически появится машина (обычно в самом начале дороги)")]
+        [Tooltip("РўРѕС‡РєР°, РіРґРµ С„РёР·РёС‡РµСЃРєРё РїРѕСЏРІРёС‚СЃСЏ РјР°С€РёРЅР° (РѕР±С‹С‡РЅРѕ РІ СЃР°РјРѕРј РЅР°С‡Р°Р»Рµ РґРѕСЂРѕРіРё)")]
         public Transform spawnPoint;
-        [Tooltip("Стартовая полоса (перетаскивать сюда объект Lane_Forward нужной дороги)")]
+        [Tooltip("РЎС‚Р°СЂС‚РѕРІР°СЏ РїРѕР»РѕСЃР° (РїРµСЂРµС‚Р°СЃРєРёРІР°С‚СЊ СЃСЋРґР° РѕР±СЉРµРєС‚ Lane_Forward РЅСѓР¶РЅРѕР№ РґРѕСЂРѕРіРё)")]
         public RoadSegment startSegment;
     }
 
-    [Header("Настройки префабов машин")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РїСЂРµС„Р°Р±РѕРІ РјР°С€РёРЅ")]
     public List<GameObject> carPrefabs;
 
-    [Header("Точки спавна на въездах в систему")]
+    [Header("РўРѕС‡РєРё СЃРїР°РІРЅР° РЅР° РІСЉРµР·РґР°С… РІ СЃРёСЃС‚РµРјСѓ")]
     public List<SpawnRoute> spawnRoutes;
 
-    [Header("Настройки интенсивности")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РёРЅС‚РµРЅСЃРёРІРЅРѕСЃС‚Рё")]
     public float spawnInterval = 3f;
+    public int maxActiveCars = 50; // Limit total cars to prevent memory issues
 
-    [Header("Настройки отображения")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ")]
     public bool showRoadGizmos = true;
     public static bool ShowDebugGizmos { get; private set; } = true;
 
     private float timer;
+    private int activeCarCount = 0;
 
     private void OnValidate()
     {
@@ -41,7 +43,7 @@ public class TrafficGenerator : MonoBehaviour
     void Update()
     {
         timer += Time.deltaTime;
-        if (timer >= spawnInterval)
+        if (timer >= spawnInterval && activeCarCount < maxActiveCars)
         {
             timer = 0f;
             SpawnRandomVehicle();
@@ -52,24 +54,43 @@ public class TrafficGenerator : MonoBehaviour
     {
         if (carPrefabs.Count == 0 || spawnRoutes.Count == 0) return;
 
-        // Выбираем случайную точку въезда из списка
+        // Р’С‹Р±РёСЂР°РµРј СЃР»СѓС‡Р°Р№РЅСѓСЋ С‚РѕС‡РєСѓ РІСЉРµР·РґР° РёР· СЃРїРёСЃРєР°
         SpawnRoute selectedRoute = spawnRoutes[Random.Range(0, spawnRoutes.Count)];
 
         if (selectedRoute.startSegment == null || selectedRoute.spawnPoint == null) return;
 
-        // Спавним случайную машину из доступных префабов
+        // РџСЂРѕРІРµСЂСЏРµРј, РЅРµС‚ Р»Рё СѓР¶Рµ РјР°С€РёРЅС‹ РЅР° СЃРїР°СѓРЅРїРѕРёРЅС‚Рµ (СЂР°РґРёСѓСЃ 0.7Рј)
+        Collider[] hitColliders = Physics.OverlapSphere(selectedRoute.spawnPoint.position, 0.7f);
+        foreach (var hit in hitColliders)
+        {
+            if (hit.CompareTag("Car")) return;  // РњРµСЃС‚Рѕ Р·Р°РЅСЏС‚Рѕ вЂ” РЅРµ СЃРїР°РІРЅРёРј
+        }
+
+        // РЎРїР°РІРЅРёРј СЃР»СѓС‡Р°Р№РЅСѓСЋ РјР°С€РёРЅСѓ РёР· РґРѕСЃС‚СѓРїРЅС‹С… РїСЂРµС„Р°Р±РѕРІ
         GameObject randomCarPrefab = carPrefabs[Random.Range(0, carPrefabs.Count)];
         GameObject car = Instantiate(randomCarPrefab, selectedRoute.spawnPoint.position, selectedRoute.spawnPoint.rotation);
+
+        activeCarCount++;
+        
+        // Auto-cleanup when car is destroyed
+        var cleanup = car.AddComponent<CarCleanupHandler>();
+        cleanup.Initialize(this);
 
         WaypointNavigator navigator = car.GetComponent<WaypointNavigator>();
         if (navigator != null)
         {
-            // Передаем машине сегмент дороги. Настройки ПДД она подтянет из него автоматически
+            // РџРµСЂРµРґР°РµРј РјР°С€РёРЅРµ СЃРµРіРјРµРЅС‚ РґРѕСЂРѕРіРё. РќР°СЃС‚СЂРѕР№РєРё РџР”Р” РѕРЅР° РїРѕРґС‚СЏРЅРµС‚ РёР· РЅРµРіРѕ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё
             navigator.SetupSegment(selectedRoute.startSegment, true);
         }
     }
+    
+    // Called by CarCleanupHandler when a car is destroyed
+    public void OnCarDestroyed()
+    {
+        activeCarCount = Mathf.Max(0, activeCarCount - 1);
+    }
 
-    // Отрисовка зон спавна в редакторе
+    // РћС‚СЂРёСЃРѕРІРєР° Р·РѕРЅ СЃРїР°РІРЅР° РІ СЂРµРґР°РєС‚РѕСЂРµ
     void OnDrawGizmosSelected()
     {
         if (spawnRoutes == null) return;
