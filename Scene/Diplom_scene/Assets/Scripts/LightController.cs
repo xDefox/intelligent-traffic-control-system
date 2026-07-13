@@ -108,8 +108,20 @@ public class IntersectionManager : MonoBehaviour
 
         // Определяем, к какой оси относится laneId
         bool isXAxis = IsXAxisLane(laneId);
-        if (isXAxis && xIsTransitioning) return;
-        if (!isXAxis && zIsTransitioning) return;
+        string axisName = isXAxis ? "X" : "Z";
+        
+        Debug.Log($"[IntersectionManager] 📥 Команда для {laneId}: {command} (ось {axisName}, duration={greenDuration}с)");
+        
+        if (isXAxis && xIsTransitioning) 
+        {
+            Debug.Log($"[IntersectionManager] ⏸️ X-axis в переходе, пропускаем");
+            return;
+        }
+        if (!isXAxis && zIsTransitioning) 
+        {
+            Debug.Log($"[IntersectionManager] ⏸️ Z-axis в переходе, пропускаем");
+            return;
+        }
 
         string cmd = command.ToUpper().Trim();
 

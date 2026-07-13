@@ -116,10 +116,12 @@ class TrafficOrchestrator:
             if data["intersection_id"] != inter_id:
                 continue
             lane_phase = traffic_network.get_phase_for_approach(inter_id, data["approach"])
+            print(f"  🔎 [{inter_id}] {lane_id} (approach {data['approach']}) → фаза {lane_phase}, машин: {data['car_count']}")
             if lane_phase in phase_cars:
                 phase_cars[lane_phase] += data["car_count"]
         
         print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
+        print(f"  🔍 [{inter_id}] Lane pool: {[(k, v['approach'], v['car_count']) for k,v in traffic_network.lane_pool.items() if v['intersection_id'] == inter_id]}")
         
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)

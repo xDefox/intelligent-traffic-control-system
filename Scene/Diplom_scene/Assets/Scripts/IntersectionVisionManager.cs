@@ -68,7 +68,14 @@ public class IntersectionVisionManager : MonoBehaviour
             intersectionId = ExtractIntersectionIdFromName(gameObject.name);
         }
         
-        Debug.Log($"[{gameObject.name}] 🚦 IntersectionVisionManager запущен: ID={intersectionId}, Камер={xAxisCameras.Count + zAxisCameras.Count}");
+        Debug.Log($"[{gameObject.name}] 🚦 IntersectionVisionManager запущен: ID={intersectionId}, Камер X={xAxisCameras.Count}, Z={zAxisCameras.Count}, Всего={xAxisCameras.Count + zAxisCameras.Count}");
+        
+        if (xAxisCameras.Count == 0 || zAxisCameras.Count == 0)
+        {
+            Debug.LogError($"[{gameObject.name}] ❌ ОШИБКА: Не все камеры назначены! X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Оба списка должны быть заполнены!");
+            Debug.LogError($"[{gameObject.name}] ❌ Без Z-камер система не будет видеть машин с направления -Z и не будет включать зелёный для NS фазы!");
+            return; // Не запускаем без всех камер
+        }
         
         if (intersectionController == null)
         {
@@ -149,8 +156,19 @@ public class IntersectionVisionManager : MonoBehaviour
                 }
             }
 
-            // Шаг 3: Отправляем batch телеметрию (1 POST вместо 4)
-            yield return StartCoroutine(SendBatchTelemetry());
+        // Debug: показываем что детектирует каждая камера
+        if (enableDebugLogs)
+        {
+            for (int i = 0; i < allCameras.Count; i++)
+            {
+                string axis = i < xAxisCameras.Count ? "X" : "Z";
+                int camIndex = i < xAxisCameras.Count ? i : i - xAxisCameras.Count;
+                Debug.Log($"[{intersectionId}] Камера {i} ({axis}-{camIndex}): {cameraResults[i]} машин");
+            }
+        }
+        
+        // Шаг 3: Отправляем batch телеметрию (1 POST вместо 4)
+        yield return StartCoroutine(SendBatchTelemetry());
 
             // Освобождаем RenderTexture у камер
             for (int i = 0; i < allCameras.Count; i++)
@@ -176,7 +194,20 @@ public class IntersectionVisionManager : MonoBehaviour
         for (int i = 0; i < allCameras.Count; i++)
         {
             if (allCameras[i] == null) continue;
-            string laneId = $"{intersectionId}_approach_{i}";
+            
+            // Правильный индексация: X-камеры получают approach_0,1; Z-камеры получают approach_2,3
+            int approachIndex;
+            if (i < xAxisCameras.Count)
+            {
+                approachIndex = i;  // X-axis: 0, 1
+            }
+            else
+            {
+                approachIndex = 2 + (i - xAxisCameras.Count);  // Z-axis: 2, 3 (всегда начинается с 2)
+            }
+            
+            string laneId = $"{intersectionId}_approach_{approachIndex}";
+            string axisType = i < xAxisCameras.Count ? "X" : "Z";
 
             CameraTelemetryDTO cam = new CameraTelemetryDTO
             {
@@ -193,6 +224,8 @@ public class IntersectionVisionManager : MonoBehaviour
                 }
             };
             batch.cameras.Add(cam);
+            
+            Debug.Log($"[{intersectionId}] Камера {i} ({axisType}-ось) → {laneId}");
         }
 
         if (batch.cameras.Count == 0) yield break;
