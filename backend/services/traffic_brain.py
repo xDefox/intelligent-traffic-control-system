@@ -5,6 +5,22 @@ from backend.services.graph_manager import traffic_network
 import time
 
 
+# Глобальный словарь для отслеживания активных фаз на каждом перекрёстке
+# {intersection_id: {"active_phase": str, "phase_start_time": float, "min_duration": float}}
+_intersection_phase_state: Dict[str, dict] = {}
+
+
+def _get_intersection_phase_state(intersection_id: str) -> dict:
+    """Получить или создать состояние фазы для перекрёстка"""
+    if intersection_id not in _intersection_phase_state:
+        _intersection_phase_state[intersection_id] = {
+            "active_phase": None,
+            "phase_start_time": 0,
+            "min_duration": 5.0,
+        }
+    return _intersection_phase_state[intersection_id]
+
+
 class AdaptiveTrafficBrain:
     """
     Локальный мозг перекрёстка (Fog-уровень).
@@ -36,6 +52,8 @@ class AdaptiveTrafficBrain:
         Вернуть (команда, длительность_зелёного) для конкретного светофора.
         
         Логика:
+        - Координируем фазы на уровне перекрёстка (не даём конфликты)
+        - Учитываем загруженность downstream дорог
         - Если есть машины → GREEN с длительностью на основе загруженности
         - Если машин нет → RED
         - Не переключаемся чаще чем раз в 5 секунд
@@ -55,7 +73,33 @@ class AdaptiveTrafficBrain:
             self._last_car_count = lane.car_count
             self._last_max_capacity = lane.max_capacity
 
-        # 2. Решение для конкретного светофора
+        # 2. Проверяем, можно ли включить эту полосу (координация на уровне перекрёстка)
+        intersection_id = update.intersection_id
+        lane_id = update.camera_id
+        
+        # Получаем фазу для этого подхода
+        phase_name = traffic_network.get_phase_for_approach(intersection_id, lane_id.replace(f"{intersection_id}_", ""))
+        
+        # Проверяем, разрешена ли эта фаза сейчас
+        if not self._is_phase_allowed(intersection_id, phase_name):
+            # Фаза не разрешена - держим красный
+            if self._current_command != "RED":
+                self._current_command = "RED"
+                self._green_start_time = 0
+                print(f"  🔴 [{lane_id}] Фаза {phase_name} заблокирована конфликтной → RED")
+            return self._current_command, 0.0
+        
+        # 3. Проверяем downstream загруженность
+        downstream_congestion = self._get_downstream_congestion(intersection_id, lane_id)
+        if downstream_congestion > 0.8:
+            # Downstream перегружен >80% - не пускаем новых машин
+            if self._current_command != "RED":
+                self._current_command = "RED"
+                self._green_start_time = 0
+                print(f"  🔴 [{lane_id}] Downstream перегружен ({downstream_congestion:.0%}) → RED")
+            return self._current_command, 0.0
+        
+        # 4. Решение для конкретного светофора
         elapsed = time.time() - self._green_start_time if self._green_start_time > 0 else 999
         
         # Если только что включили зелёный - ждём минимум времени
@@ -74,7 +118,7 @@ class AdaptiveTrafficBrain:
                 green_duration = min(30.0, max(5.0, green_duration))  # Ограничиваем 5-30 сек
                 
                 self._current_duration = green_duration
-                print(f"  🟢 [{self.intersection_id}] Машины: {self._last_car_count}/{self._last_max_capacity} "
+                print(f"  🟢 [{lane_id}] Машины: {self._last_car_count}/{self._last_max_capacity} "
                       f"({congestion_ratio:.0%}) → GREEN на {green_duration:.1f}с")
                 
                 return self._current_command, green_duration
@@ -86,9 +130,87 @@ class AdaptiveTrafficBrain:
             if self._current_command != "RED":
                 self._current_command = "RED"
                 self._green_start_time = 0
-                print(f"  🔴 [{self.intersection_id}] Пусто → RED")
+                print(f"  🔴 [{lane_id}] Пусто → RED")
             
             return self._current_command, 0.0
+    
+    def _is_phase_allowed(self, intersection_id: str, phase_name: str) -> bool:
+        """
+        Проверить, разрешена ли фаза на перекрёстке.
+        Не даём одновременно гореть противоречивым фазам (NS vs EW).
+        """
+        if not phase_name:
+            return False
+        
+        # Получаем состояние фазы для этого перекрёстка
+        phase_state = _get_intersection_phase_state(intersection_id)
+        active_phase = phase_state["active_phase"]
+        
+        # Если фаза ещё не активна - разрешаем и устанавливаем
+        if active_phase is None:
+            phase_state["active_phase"] = phase_name
+            phase_state["phase_start_time"] = time.time()
+            phase_state["min_duration"] = 5.0
+            return True
+        
+        # Если активна эта же фаза - разрешаем
+        if active_phase == phase_name:
+            return True
+        
+        # Если активна противоположная фаза - проверяем, можно ли переключиться
+        phases = traffic_network.intersection_phases.get(intersection_id, {})
+        if len(phases) < 2:
+            return True
+        
+        phase_names = list(phases.keys())
+        opposite_phase = phase_names[1] if phase_names[0] == phase_name else phase_names[0]
+        
+        # Если активна противоположная фаза - проверяем минимальное время
+        if active_phase == opposite_phase:
+            elapsed = time.time() - phase_state["phase_start_time"]
+            if elapsed < phase_state["min_duration"]:
+                # Минимальное время не прошло - блокируем переключение
+                return False
+            else:
+                # Можно переключиться
+                phase_state["active_phase"] = phase_name
+                phase_state["phase_start_time"] = time.time()
+                phase_state["min_duration"] = 5.0
+                print(f"  🔄 [{intersection_id}] Переключение фазы: {active_phase} → {phase_name}")
+                return True
+        
+        # Разрешаем переключение
+        return True
+    
+    def _get_downstream_congestion(self, intersection_id: str, lane_id: str) -> float:
+        """
+        Получить загруженность downstream дорог.
+        Если downstream перегружен >80%, не пускаем новых машин.
+        """
+        # Получаем downstream перекрёстки
+        downstream_map = traffic_network.get_downstream_intersections(intersection_id)
+        
+        # Извлекаем подход из lane_id
+        if "_approach_" in lane_id:
+            approach = lane_id.split("_approach_")[-1]
+            approach = f"approach_{approach}"
+        else:
+            return 0.0
+        
+        if approach not in downstream_map:
+            return 0.0
+        
+        # Считаем среднюю загруженность downstream перекрёстков
+        total_congestion = 0.0
+        count = 0
+        for down_inter in downstream_map[approach]:
+            # Получаем все полосы downstream перекрёстка
+            lanes = traffic_network.get_lanes_for_intersection(down_inter)
+            for lane in lanes:
+                total_congestion += lane.get("congestion_index", 0.0)
+                count += 1
+        
+        return total_congestion / count if count > 0 else 0.0
 
     def process_telemetry(self, update: IntersectionUpdateDTO) -> str:
         """

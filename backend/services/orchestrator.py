@@ -1,7 +1,7 @@
 # backend/services/orchestrator.py
 import json
 from typing import Dict
-from backend.models.traffic import IntersectionUpdateDTO
+from backend.models.traffic import IntersectionUpdateDTO, BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
 from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
@@ -42,17 +42,10 @@ class TrafficOrchestrator:
                 if cmd.get("target_intersection") == inter_id:
                     brain.apply_cascade_command(cmd)
 
-        # 3. Мозг обрабатывает телеметрию и решает команду для этого конкретного светофора
+        # 3. Мозг обрабатывает телеметрию.
+        #    ВАЖНО: process_lane_telemetry() уже обновляет lane_pool внутри себя через
+        #    traffic_network.update_lane_state(), поэтому НЕ дублируем вызов.
         target_command, green_duration = brain.process_lane_telemetry(update)
-
-        # 4. Обновляем состояние полосы в графе
-        for lane in update.lanes:
-            traffic_network.update_lane_state(
-                lane_id=lane.lane_id,
-                car_count=lane.car_count,
-                avg_speed=lane.avg_speed,
-                max_capacity=lane.max_capacity,
-            )
 
         # 5. Собираем состояние для UI
         ui_lanes = []
@@ -84,3 +77,31 @@ class TrafficOrchestrator:
             "green_duration": green_duration,
             "cascade_applied": False,
         }
+
+    async def handle_batch_telemetry(self, batch: BatchTelemetryDTO) -> list:
+        """
+        Обработать batch-телеметрию от ВСЕХ камер одного перекрёстка.
+        
+        В Dubai-архитектуре каждый светофор независим, но мы объединяем
+        N HTTP запросов в 1 для снижения накладных расходов.
+        """
+        inter_id = batch.intersection_id
+        responses = []
+
+        for cam in batch.cameras:
+            # Создаём IntersectionUpdateDTO для каждой камеры (сохраняем Dubai-архитектуру)
+            fake_update = IntersectionUpdateDTO(
+                intersection_id=inter_id,
+                camera_id=cam.camera_id,
+                lanes=cam.lanes,
+            )
+
+            result = await self.handle_telemetry(fake_update)
+
+            responses.append(SingleResponseDTO(
+                camera_id=cam.camera_id,
+                target_phase=result["target_phase"],
+                green_duration=result.get("green_duration", 0.0),
+            ))
+
+        return responses

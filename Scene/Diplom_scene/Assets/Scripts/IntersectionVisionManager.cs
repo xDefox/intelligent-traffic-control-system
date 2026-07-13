@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.InferenceEngine;
 using UnityEngine;
 using UnityEngine.Networking;
+using System;
 
 public class IntersectionVisionManager : MonoBehaviour
 {
@@ -14,8 +15,8 @@ public class IntersectionVisionManager : MonoBehaviour
 
     [Header("Настройки ИИ")]
     public ModelAsset sharedYoloModel;
-    public float globalDetectionInterval = 0.5f; // Increased from 0.2s to reduce CPU load
-    public bool enableDebugLogs = false; // Set to true to see debug messages
+    public float globalDetectionInterval = 0.5f;
+    public bool enableDebugLogs = false;
 
     [Header("Камеры, контролирующие Ось X")]
     public List<EdgeVisionCamera> xAxisCameras = new List<EdgeVisionCamera>();
@@ -23,8 +24,8 @@ public class IntersectionVisionManager : MonoBehaviour
     [Header("Камеры, контролирующие Ось Z")]
     public List<EdgeVisionCamera> zAxisCameras = new List<EdgeVisionCamera>();
 
-    [Header("Сетевой шлюз (FastAPI)")]
-    public string telemetryUrl = "http://127.0.0.1:8050/api/v1/telemetry";
+    [Header("Сетевой шлюз (batch HTTP)")]
+    public string batchTelemetryUrl = "http://127.0.0.1:8050/api/v1/telemetry/batch";
 
     private Worker sharedEngine;
     private Tensor<float> sharedInputTensor;
@@ -39,20 +40,22 @@ public class IntersectionVisionManager : MonoBehaviour
     }
 
     [System.Serializable]
-    private class IntersectionUpdateDTO
+    private class BatchTelemetryDTO
     {
         public string intersection_id;
+        public List<CameraTelemetryDTO> cameras;
+    }
+
+    [System.Serializable]
+    private class CameraTelemetryDTO
+    {
         public string camera_id;
         public List<LaneDetectionDTO> lanes;
     }
 
-    [System.Serializable]
-    private class BackendResponseDTO
-    {
-        public string target_phase;
-        public float green_duration;
-        public bool cascade_applied;
-    }
+    // Кэш камер для batch inference
+    private List<EdgeVisionCamera> allCameras = new List<EdgeVisionCamera>();
+    private int[] cameraResults;
 
     void Start()
     {
@@ -65,69 +68,86 @@ public class IntersectionVisionManager : MonoBehaviour
 
         Model runtimeModel = ModelLoader.Load(sharedYoloModel);
         sharedEngine = new Worker(runtimeModel, BackendType.GPUCompute);
-        
-        // Keep original 1280x1280 as required by the model
         sharedInputTensor = new Tensor<float>(new TensorShape(1, 3, 1280, 1280));
+
+        // Собираем все камеры в единый список для batch-обработки
+        allCameras.Clear();
+        allCameras.AddRange(xAxisCameras);
+        allCameras.AddRange(zAxisCameras);
+        cameraResults = new int[allCameras.Count];
 
         StartCoroutine(CentralizedInferenceLoop());
     }
 
-    private Coroutine inferenceCoroutine;
-    private bool isProcessing = false;
-    
     IEnumerator CentralizedInferenceLoop()
     {
         while (true)
         {
-            if (!isProcessing)
+            // Шаг 1: Захватываем кадры со ВСЕХ камер (без инференса)
+            List<RenderTexture> capturedRTs = new List<RenderTexture>();
+            for (int i = 0; i < allCameras.Count; i++)
             {
-                isProcessing = true;
-                
+                if (allCameras[i] != null)
+                {
+                    RenderTexture rt = allCameras[i].CaptureFrame();
+                    capturedRTs.Add(rt);
+                }
+                else
+                {
+                    capturedRTs.Add(null);
+                }
+            }
+
+            // Шаг 2: Schedule ВСЕХ инференсов сразу (GPU работает параллельно)
+            List<int> scheduledIndices = new List<int>();
+            for (int i = 0; i < capturedRTs.Count; i++)
+            {
+                if (capturedRTs[i] != null)
+                {
+                    try
+                    {
+                        TextureConverter.ToTensor(capturedRTs[i], sharedInputTensor);
+                        sharedEngine.Schedule(sharedInputTensor);
+                        scheduledIndices.Add(i);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"[{intersectionId}] Schedule error camera {i}: {ex.Message}");
+                    }
+                }
+            }
+
+            // Шаг 3: Readback ПОСЛЕДОВАТЕЛЬНО для всех schedule'd инференсов
+            // GPU уже обработал пачку, мы только забираем результаты
+            for (int s = 0; s < scheduledIndices.Count; s++)
+            {
+                int idx = scheduledIndices[s];
                 try
                 {
-                    // Ось X -> подходы 0, 1
-                    for (int i = 0; i < xAxisCameras.Count; i++)
+                    Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
+                    if (outputTensor != null)
                     {
-                        if (xAxisCameras[i] != null)
-                        {
-                            int carCount = ProcessSingleCamera(xAxisCameras[i]);
-                            
-                            if (enableDebugLogs)
-                                Debug.Log($"[{intersectionId}] Camera {i} detected {carCount} cars");
-                            
-                            StartCoroutine(SendSingleCameraTelemetry(
-                                $"{intersectionId}_approach_{i}",
-                                carCount,
-                                xAxisCameras[i].maxZoneCapacity
-                            ));
-                        }
+                        int count = allCameras[idx].UpdateDetectionsAndGetCount(outputTensor);
+                        cameraResults[idx] = count;
+                        outputTensor.Dispose();
                     }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[{intersectionId}] Readback error camera {idx}: {ex.Message}");
+                    cameraResults[idx] = 0;
+                }
+            }
 
-                    // Ось Z -> подходы 2, 3
-                    for (int i = 0; i < zAxisCameras.Count; i++)
-                    {
-                        if (zAxisCameras[i] != null)
-                        {
-                            int carCount = ProcessSingleCamera(zAxisCameras[i]);
-                            
-                            if (enableDebugLogs)
-                                Debug.Log($"[{intersectionId}] Camera {i+2} detected {carCount} cars");
-                            
-                            StartCoroutine(SendSingleCameraTelemetry(
-                                $"{intersectionId}_approach_{i + 2}",
-                                carCount,
-                                zAxisCameras[i].maxZoneCapacity
-                            ));
-                        }
-                    }
-                }
-                catch (System.Exception ex)
+            // Шаг 4: Отправляем batch телеметрию (1 POST вместо 4)
+            yield return StartCoroutine(SendBatchTelemetry());
+
+            // Освобождаем RenderTexture у камер
+            for (int i = 0; i < allCameras.Count; i++)
+            {
+                if (allCameras[i] != null)
                 {
-                    Debug.LogError($"[{intersectionId}] Inference error: {ex.Message}");
-                }
-                finally
-                {
-                    isProcessing = false;
+                    allCameras[i].ReleaseFrame();
                 }
             }
 
@@ -135,59 +155,50 @@ public class IntersectionVisionManager : MonoBehaviour
         }
     }
 
-    int ProcessSingleCamera(EdgeVisionCamera cam)
+    IEnumerator SendBatchTelemetry()
     {
-        if (cam == null) return 0;
-        
-        // Cache RenderTexture to avoid creating new ones
-        RenderTexture cameraRt = cam.CaptureFrame();
-        if (cameraRt == null) return 0;
-
-        TextureConverter.ToTensor(cameraRt, sharedInputTensor);
-        sharedEngine.Schedule(sharedInputTensor);
-
-        Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
-        int result = cam.UpdateDetectionsAndGetCount(outputTensor);
-        
-        // Release tensor immediately
-        outputTensor.Dispose();
-        
-        return result;
-    }
-
-    IEnumerator SendSingleCameraTelemetry(string laneId, int carCount, int maxCapacity)
-    {
-        if (enableDebugLogs)
-            Debug.Log($"[{intersectionId}] Sending telemetry for {laneId}: {carCount} cars");
-        
-        // Создаем DTO для ОДНОЙ камеры/подхода
-        LaneDetectionDTO singleLane = new LaneDetectionDTO
-        {
-            lane_id = laneId,
-            car_count = carCount,
-            avg_speed = 0f,
-            max_capacity = maxCapacity
-        };
-
-        IntersectionUpdateDTO payload = new IntersectionUpdateDTO
+        BatchTelemetryDTO batch = new BatchTelemetryDTO
         {
             intersection_id = intersectionId,
-            camera_id = laneId,
-            lanes = new List<LaneDetectionDTO> { singleLane }
+            cameras = new List<CameraTelemetryDTO>()
         };
 
-        string json = JsonUtility.ToJson(payload);
-        
-        if (enableDebugLogs)
-            Debug.Log($"[{intersectionId}] Payload: {json}");
+        for (int i = 0; i < allCameras.Count; i++)
+        {
+            if (allCameras[i] == null) continue;
+            string laneId = $"{intersectionId}_approach_{i}";
 
-        using (UnityWebRequest request = new UnityWebRequest(telemetryUrl, "POST"))
+            CameraTelemetryDTO cam = new CameraTelemetryDTO
+            {
+                camera_id = laneId,
+                lanes = new List<LaneDetectionDTO>
+                {
+                    new LaneDetectionDTO
+                    {
+                        lane_id = laneId,
+                        car_count = cameraResults[i],
+                        avg_speed = 0f,
+                        max_capacity = allCameras[i].maxZoneCapacity
+                    }
+                }
+            };
+            batch.cameras.Add(cam);
+        }
+
+        if (batch.cameras.Count == 0) yield break;
+
+        string json = JsonUtility.ToJson(batch);
+
+        if (enableDebugLogs)
+            Debug.Log($"[{intersectionId}] Batch telemetry: {json}");
+
+        using (UnityWebRequest request = new UnityWebRequest(batchTelemetryUrl, "POST"))
         {
             byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
-            request.timeout = 5; // 5 second timeout
+            request.timeout = 5;
 
             yield return request.SendWebRequest();
 
@@ -195,35 +206,35 @@ public class IntersectionVisionManager : MonoBehaviour
             {
                 string jsonResponse = request.downloadHandler.text;
                 if (enableDebugLogs)
-                    Debug.Log($"[{intersectionId}] Response for {laneId}: {jsonResponse}");
-                
+                    Debug.Log($"[{intersectionId}] Batch response: {jsonResponse}");
+
                 try
                 {
-                    BackendResponseDTO responseData = JsonUtility.FromJson<BackendResponseDTO>(jsonResponse);
-                    if (responseData != null && intersectionController != null)
+                    // Парсим batch-ответ: {"type":"batch_response","responses":[{"camera_id":"...","target_phase":"GREEN","green_duration":10.0},...]}
+                    BatchResponseDTO responseData = JsonUtility.FromJson<BatchResponseDTO>(jsonResponse);
+                    if (responseData?.responses != null && intersectionController != null)
                     {
-                        if (enableDebugLogs)
-                            Debug.Log($"[{intersectionId}] Applying command: {responseData.target_phase} for {responseData.green_duration}s");
-                        
-                        intersectionController.ReceiveCommandForLane(
-                            laneId, 
-                            responseData.target_phase,
-                            responseData.green_duration
-                        );
-                    }
-                    else if (enableDebugLogs)
-                    {
-                        Debug.LogWarning($"[{intersectionId}] Null response or controller for {laneId}");
+                        foreach (var resp in responseData.responses)
+                        {
+                            if (enableDebugLogs)
+                                Debug.Log($"[{intersectionId}] Command {resp.camera_id}: {resp.target_phase} ({resp.green_duration}s)");
+
+                            intersectionController.ReceiveCommandForLane(
+                                resp.camera_id,
+                                resp.target_phase,
+                                resp.green_duration
+                            );
+                        }
                     }
                 }
-                catch (System.Exception ex)
+                catch (Exception ex)
                 {
-                    Debug.LogError($"[JSON Parse Error] {ex.Message}\nResponse: {jsonResponse}");
+                    Debug.LogError($"[{intersectionId}] Batch parse error: {ex.Message}\nResponse: {jsonResponse}");
                 }
             }
             else
             {
-                Debug.LogError($"[{intersectionId}] WebRequest failed for {laneId}: {request.error}\nURL: {telemetryUrl}");
+                Debug.LogError($"[{intersectionId}] Batch request failed: {request.error}");
             }
         }
     }
@@ -232,5 +243,30 @@ public class IntersectionVisionManager : MonoBehaviour
     {
         sharedEngine?.Dispose();
         sharedInputTensor?.Dispose();
+
+        if (allCameras != null)
+        {
+            foreach (var cam in allCameras)
+            {
+                if (cam != null) cam.ReleaseFrame();
+            }
+        }
+    }
+
+    // Вспомогательные классы
+
+    [System.Serializable]
+    private class BatchResponseDTO
+    {
+        public string type;
+        public List<SingleResponseDTO> responses;
+    }
+
+    [System.Serializable]
+    private class SingleResponseDTO
+    {
+        public string camera_id;
+        public string target_phase;
+        public float green_duration;
     }
 }

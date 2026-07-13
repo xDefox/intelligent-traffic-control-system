@@ -1,7 +1,7 @@
 # backend/main.py
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from backend.models.traffic import IntersectionUpdateDTO
+from backend.models.traffic import IntersectionUpdateDTO, BatchTelemetryDTO, BatchResponseDTO, SingleResponseDTO
 from backend.services.orchestrator import TrafficOrchestrator
 from backend.services.cloud_orchestrator import CloudOrchestrator
 
@@ -66,6 +66,17 @@ async def receive_telemetry(update: IntersectionUpdateDTO):
         "green_duration": result.get("green_duration", 0.0),
         "cascade_applied": result["cascade_applied"],
     }
+
+
+@app.post("/api/v1/telemetry/batch")
+async def receive_batch_telemetry(batch: BatchTelemetryDTO):
+    """Batch-эндпоинт: принимает телеметрию от ВСЕХ камер перекрёстка в одном запросе.
+    
+    Unity шлёт:  1 POST вместо N отдельных POST.
+    Backend отвечает: массив команд для каждой камеры.
+    """
+    responses = await orchestrator.handle_batch_telemetry(batch)
+    return BatchResponseDTO(responses=responses)
 
 
 @app.get("/api/v1/state")

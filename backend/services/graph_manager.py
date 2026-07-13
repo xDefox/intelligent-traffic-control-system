@@ -65,6 +65,9 @@ class CityTrafficGraph:
         self.graph = nx.DiGraph()
         self.lane_pool: Dict[str, dict] = {}
         self.intersection_phases: Dict[str, dict] = {}
+        # Кэш upstream/downstream — топология графа статична
+        self._upstream_cache: Dict[str, Dict[str, List[str]]] = {}
+        self._downstream_cache: Dict[str, Dict[str, List[str]]] = {}
         self._build_from_config()
 
     def _build_from_config(self):
@@ -72,6 +75,8 @@ class CityTrafficGraph:
         self.graph.clear()
         self.lane_pool.clear()
         self.intersection_phases.clear()
+        self._upstream_cache.clear()
+        self._downstream_cache.clear()
 
         # 1. Запоминаем фазы для каждого перекрёстка
         for inter_id, config in ROADS.items():
@@ -108,6 +113,9 @@ class CityTrafficGraph:
                 lane_id=src,
                 connected=True
             )
+
+        # 4. Предвычисляем upstream/downstream кэш
+        self._precompute_topology_cache()
 
     # ===================== ОБНОВЛЕНИЕ СОСТОЯНИЯ =====================
 
@@ -175,45 +183,47 @@ class CityTrafficGraph:
 
     # ===================== КАСКАДНОЕ УПРАВЛЕНИЕ =====================
 
+    def _precompute_topology_cache(self):
+        """Предвычислить upstream/downstream для всех перекрёстков.
+        Топология графа статична (не меняется после загрузки конфига),
+        поэтому кэш считается один раз в _build_from_config()."""
+        for inter_id in self.intersection_phases:
+            # Upstream
+            upstream_cache = {}
+            for lane_id, data in self.lane_pool.items():
+                if data["intersection_id"] != inter_id:
+                    continue
+                approach = data["approach"]
+                node = (inter_id, approach)
+                for u, v, edge_data in self.graph.in_edges(node, data=True):
+                    if u[0] != inter_id:
+                        upstream_cache.setdefault(approach, []).append(u[0])
+            self._upstream_cache[inter_id] = upstream_cache
+
+            # Downstream
+            downstream_cache = {}
+            for lane_id, data in self.lane_pool.items():
+                if data["intersection_id"] != inter_id:
+                    continue
+                approach = data["approach"]
+                node = (inter_id, approach)
+                for u, v, edge_data in self.graph.out_edges(node, data=True):
+                    if v[0] != inter_id:
+                        downstream_cache.setdefault(approach, []).append(v[0])
+            self._downstream_cache[inter_id] = downstream_cache
+
     def get_upstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
         """
         Для каждого подхода перекрёстка найти upstream перекрёстки.
         {approach: [intersection_id, ...]}
+        Использует предвычисленный кэш — O(1) вместо обхода графа.
         """
-        upstream = {}
-        for lane_id, data in self.lane_pool.items():
-            if data["intersection_id"] != intersection_id:
-                continue
-
-            approach = data["approach"]
-            node = (intersection_id, approach)
-
-            # Кто вливает трафик в этот узел?
-            for u, v, edge_data in self.graph.in_edges(node, data=True):
-                if u[0] != intersection_id:
-                    if approach not in upstream:
-                        upstream[approach] = []
-                    upstream[approach].append(u[0])
-
-        return upstream
+        return self._upstream_cache.get(intersection_id, {}).copy()
 
     def get_downstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
-        """Для каждого подхода найти downstream перекрёстки"""
-        downstream = {}
-        for lane_id, data in self.lane_pool.items():
-            if data["intersection_id"] != intersection_id:
-                continue
-
-            approach = data["approach"]
-            node = (intersection_id, approach)
-
-            for u, v, edge_data in self.graph.out_edges(node, data=True):
-                if v[0] != intersection_id:
-                    if approach not in downstream:
-                        downstream[approach] = []
-                    downstream[approach].append(v[0])
-
-        return downstream
+        """Для каждого подхода найти downstream перекрёстки.
+        Использует предвычисленный кэш — O(1) вместо обхода графа."""
+        return self._downstream_cache.get(intersection_id, {}).copy()
 
     def calculate_cascade(self) -> List[dict]:
         """
