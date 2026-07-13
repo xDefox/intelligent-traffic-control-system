@@ -20,7 +20,20 @@ public class IntersectionManager : MonoBehaviour
     private IntersectionPhase currentPhase = IntersectionPhase.Z_Green;
 
     private Coroutine cycleCoroutine;
-    private bool isTransitioning = false;
+    private bool xIsTransitioning = false;
+    private bool zIsTransitioning = false;
+
+    // Состояние для AI-управления: запоминаем, какие оси сейчас зелёные
+    // и сколько времени осталось
+    private enum AxisState { Red, Yellow, Green, Transitioning }
+    private AxisState xAxisState = AxisState.Red;
+    private AxisState zAxisState = AxisState.Red;
+    
+    // Таймеры для удлинения зелёного сигнала
+    private Coroutine xGreenCoroutine = null;
+    private Coroutine zGreenCoroutine = null;
+    private float xGreenRemaining = 0f;
+    private float zGreenRemaining = 0f;
 
     void Start()
     {
@@ -61,17 +74,23 @@ public class IntersectionManager : MonoBehaviour
             case IntersectionPhase.Z_Green:
                 SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Green);
                 SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+                zAxisState = AxisState.Green;
+                xAxisState = AxisState.Red;
                 break;
 
             case IntersectionPhase.YellowBeforeX:
             case IntersectionPhase.YellowBeforeZ:
                 SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Yellow);
                 SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Yellow);
+                zAxisState = AxisState.Yellow;
+                xAxisState = AxisState.Yellow;
                 break;
 
             case IntersectionPhase.X_Green:
                 SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
                 SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Green);
+                zAxisState = AxisState.Red;
+                xAxisState = AxisState.Green;
                 break;
         }
     }
@@ -87,89 +106,194 @@ public class IntersectionManager : MonoBehaviour
             Debug.Log("[IntersectionManager] Переключено на внешнее управление ИИ (FastAPI).");
         }
 
-        if (isTransitioning) return;
+        // Определяем, к какой оси относится laneId
+        bool isXAxis = IsXAxisLane(laneId);
+        if (isXAxis && xIsTransitioning) return;
+        if (!isXAxis && zIsTransitioning) return;
 
-        // Определяем, какой светофор нужно управлять
-        TrafficLightViewer targetLight = GetLightForLane(laneId);
-        if (targetLight == null)
+        string cmd = command.ToUpper().Trim();
+
+        switch (cmd)
         {
-            Debug.LogWarning($"[IntersectionManager] Не найден светофор для {laneId}");
-            return;
-        }
+            case "GREEN":
+                if (isXAxis)
+                {
+                    // Включаем зелёный на ВСЕХ X-светофорах (оба подхода оси X)
+                    // Предварительно гасим Z
+                    StartCoroutine(SetGreenWithRenewal(zAxisLights, TrafficLightViewer.LightColor.Red,
+                                                        xAxisLights, greenDuration, true));
+                }
+                else
+                {
+                    // Включаем зелёный на ВСЕХ Z-светофорах
+                    StartCoroutine(SetGreenWithRenewal(xAxisLights, TrafficLightViewer.LightColor.Red,
+                                                        zAxisLights, greenDuration, false));
+                }
+                break;
 
-        // ПРЯМО управляем светофором через TrafficLightViewer
-        StartCoroutine(ExecuteLightCommand(targetLight, command, greenDuration));
+            case "RED":
+                if (isXAxis)
+                {
+                    SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+                    xAxisState = AxisState.Red;
+                }
+                else
+                {
+                    SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+                    zAxisState = AxisState.Red;
+                }
+                break;
+        }
     }
 
-    private TrafficLightViewer GetLightForLane(string laneId)
+    /// <summary>
+    /// Устанавливает зелёный на целевой оси, гасит противоположную.
+    /// Если зелёный уже горит — продлевает его (renew), не переключая через жёлтый.
+    /// </summary>
+    private IEnumerator SetGreenWithRenewal(List<TrafficLightViewer> oppositeAxis, TrafficLightViewer.LightColor oppositeColor,
+                                            List<TrafficLightViewer> targetAxis, float greenDuration, bool isXAxis)
     {
-        // Извлекаем номер подхода: "intersection_1_approach_0" -> 0
+        if (isXAxis) xIsTransitioning = true;
+        else zIsTransitioning = true;
+
+        AxisState currentState = isXAxis ? xAxisState : zAxisState;
+
+        // Если та же ось уже зелёная — просто продлеваем зелёный
+        if (currentState == AxisState.Green)
+        {
+            if (isXAxis)
+            {
+                xGreenRemaining = Mathf.Max(xGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
+                Debug.Log($"[IntersectionManager] X-axis зелёный продлён: +{greenDuration}с");
+            }
+            else
+            {
+                zGreenRemaining = Mathf.Max(zGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
+                Debug.Log($"[IntersectionManager] Z-axis зелёный продлён: +{greenDuration}с");
+            }
+            if (isXAxis) xIsTransitioning = false;
+            else zIsTransitioning = false;
+            yield break;
+        }
+
+        // Если целевая ось на жёлтом или красном — сначала гасим противоположную
+        SetLightsState(oppositeAxis, oppositeColor);
+        if (isXAxis)
+        {
+            zAxisState = AxisState.Red;
+        }
+        else
+        {
+            xAxisState = AxisState.Red;
+        }
+
+        // Короткая задержка перед включением зелёного (безопасность)
+        yield return new WaitForSeconds(0.5f);
+
+        // Включаем зелёный на целевой оси
+        SetLightsState(targetAxis, TrafficLightViewer.LightColor.Green);
+        if (isXAxis)
+        {
+            xAxisState = AxisState.Green;
+            xGreenRemaining = greenDuration > 0 ? greenDuration : 5f;
+            Debug.Log($"[IntersectionManager] X-axis зелёный на {xGreenRemaining}с");
+            
+            // Запускаем таймер на смену
+            if (xGreenCoroutine != null) StopCoroutine(xGreenCoroutine);
+            xGreenCoroutine = StartCoroutine(GreenTimer(isXAxis));
+        }
+        else
+        {
+            zAxisState = AxisState.Green;
+            zGreenRemaining = greenDuration > 0 ? greenDuration : 5f;
+            Debug.Log($"[IntersectionManager] Z-axis зелёный на {zGreenRemaining}с");
+            
+            if (zGreenCoroutine != null) StopCoroutine(zGreenCoroutine);
+            zGreenCoroutine = StartCoroutine(GreenTimer(isXAxis));
+        }
+
+        if (isXAxis) xIsTransitioning = false;
+        else zIsTransitioning = false;
+    }
+
+    /// <summary>
+    /// Таймер для отслеживания оставшегося времени зелёного.
+    /// Если время истекло — переключаем на жёлтый -> красный.
+    /// Если время продлили (xGreenRemaining обновлён) — ждём дальше.
+    /// </summary>
+    private IEnumerator GreenTimer(bool isXAxis)
+    {
+        while (true)
+        {
+            float remaining = isXAxis ? xGreenRemaining : zGreenRemaining;
+            if (remaining <= 0) break;
+
+            // Ждём с проверкой каждую секунду (чтобы реагировать на продление)
+            yield return new WaitForSeconds(1f);
+
+            if (isXAxis)
+            {
+                xGreenRemaining -= 1f;
+            }
+            else
+            {
+                zGreenRemaining -= 1f;
+            }
+        }
+
+        // Время вышло — переключаем на красный
+        if (isXAxis) xIsTransitioning = true;
+        else zIsTransitioning = true;
+        
+        if (isXAxis)
+        {
+            SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Yellow);
+            yield return new WaitForSeconds(yellowDuration);
+            SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            xAxisState = AxisState.Red;
+            xGreenCoroutine = null;
+            Debug.Log("[IntersectionManager] X-axis зелёный истёк → RED");
+        }
+        else
+        {
+            SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Yellow);
+            yield return new WaitForSeconds(yellowDuration);
+            SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            zAxisState = AxisState.Red;
+            zGreenCoroutine = null;
+            Debug.Log("[IntersectionManager] Z-axis зелёный истёк → RED");
+        }
+
+        if (isXAxis) xIsTransitioning = false;
+        else zIsTransitioning = false;
+    }
+
+    /// <summary>
+    /// Определяет, к какой оси относится laneId. 
+    /// approach_0, approach_1 = X-ось; approach_2, approach_3 = Z-ось
+    /// </summary>
+    private bool IsXAxisLane(string laneId)
+    {
         if (laneId.Contains("_approach_"))
         {
             string[] parts = laneId.Split('_');
             if (int.TryParse(parts[parts.Length - 1], out int approachIndex))
             {
-                // X-axis: 0,1 -> xAxisLights[0], xAxisLights[1]
-                // Z-axis: 2,3 -> zAxisLights[0], zAxisLights[1]
-                if (approachIndex < 2 && approachIndex < xAxisLights.Count)
-                {
-                    return xAxisLights[approachIndex];
-                }
-                else if (approachIndex >= 2 && (approachIndex - 2) < zAxisLights.Count)
-                {
-                    return zAxisLights[approachIndex - 2];
-                }
+                return approachIndex < 2;
             }
         }
-        return null;
-    }
-
-    private IEnumerator ExecuteLightCommand(TrafficLightViewer light, string command, float greenDuration)
-    {
-        isTransitioning = true;
-
-        string cmd = command.ToUpper().Trim();
-        
-        switch (cmd)
-        {
-            case "GREEN":
-            case "NS":
-            case "EW":
-                // Жёлтый
-                light.SwitchToColor(TrafficLightViewer.LightColor.Yellow);
-                yield return new WaitForSeconds(yellowDuration);
-                
-                // Зелёный на указанную длительность
-                float greenTime = greenDuration > 0 ? greenDuration : 5f;
-                light.SwitchToColor(TrafficLightViewer.LightColor.Green);
-                yield return new WaitForSeconds(greenTime);
-                
-                // Автоматически в красный
-                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
-                break;
-                
-            case "YELLOW":
-                light.SwitchToColor(TrafficLightViewer.LightColor.Yellow);
-                yield return new WaitForSeconds(yellowDuration);
-                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
-                break;
-                
-            case "RED":
-            default:
-                light.SwitchToColor(TrafficLightViewer.LightColor.Red);
-                break;
-        }
-
-        isTransitioning = false;
+        return false;
     }
 
     IEnumerator NetworkTransitionRoutine(IntersectionPhase yellowPhase, IntersectionPhase finalPhase)
     {
-        isTransitioning = true;
+        xIsTransitioning = true;
+        zIsTransitioning = true;
         SetPhase(yellowPhase);
         yield return new WaitForSeconds(yellowDuration);
         SetPhase(finalPhase);
-        isTransitioning = false;
+        xIsTransitioning = false;
+        zIsTransitioning = false;
     }
 
     void SetLightsState(List<TrafficLightViewer> lights, TrafficLightViewer.LightColor color)

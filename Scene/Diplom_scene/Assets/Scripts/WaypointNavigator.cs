@@ -5,20 +5,28 @@ public class WaypointNavigator : MonoBehaviour
 {
     [Header("Настройки движения")]
     public List<Transform> waypoints = new List<Transform>();
-    public float speed = 5f;
-    public float rotationSpeed = 10f;
+    public float speed = 12f;  // Увеличена скорость для более быстрого движения
+    public float rotationSpeed = 15f;  // Увеличена скорость поворота
 
     [Header("Дистанция и Векторы")]
     [Tooltip("Дистанция до машины впереди (2.2 — идеальный плотный поджим)")]
     public float maxCheckDistance = 2.2f;
     [Tooltip("Угол поворота (в градусах), при котором луч полностью гаснет")]
-    public float turnAngleThreshold = 15f;
+    public float turnAngleThreshold = 25f;
+    [Tooltip("Радиус SphereCast для детекции машин не только строго спереди")]
+    public float sphereCastRadius = 0.5f;
 
     [Header("Плавность переходов")]
     [Tooltip("Время плавного перехода между сегментами (сек)")]
     public float segmentTransitionSmoothness = 0.3f;
     [Tooltip("Сглаживание изменения скорости (меньше = быстрее)")]
     public float speedSmoothing = 5f;
+
+    [Header("Аварийное торможение")]
+    [Tooltip("Минимальное расстояние до впереди идущей машины при котором резко тормозим (не полагаясь на Lerp)")]
+    public float emergencyBrakeDistance = 1.5f;
+    [Tooltip("Скорость сброса при аварийном торможении (чем больше, тем резче)")]
+    public float emergencyBrakeStrength = 30f;
 
     private RoadSegment currentSegment;
     private int currentWaypointIndex = 0;
@@ -41,15 +49,17 @@ public class WaypointNavigator : MonoBehaviour
     private bool usePhysics = false;
     private WheelCollider[] wheelColliders;
 
-    // Frame counter for Raycast throttling (every 3rd frame when not on intersection)
-    private int raycastFrameCounter = 0;
-    private const int RAYCAST_INTERVAL = 3; // Process raycast every N frames when not on intersection
+    // Счётчики для определения "застревания" (2 секунды на месте)
+    private float stuckTimer = 0f;
+    private const float STUCK_TIME_THRESHOLD = 2.0f;
+    private Vector3 lastPosition;
 
     void Start()
     {
         originalSpeed = speed;
         currentSpeed = speed;
-        
+        lastPosition = transform.position;
+
         // Check if car has Rigidbody
         rb = GetComponent<Rigidbody>();
         if (rb != null)
@@ -107,10 +117,10 @@ public class WaypointNavigator : MonoBehaviour
         // Базовая рабочая дистанция
         float actualMaxDistance = maxCheckDistance;
 
-        // ЕСЛИ МЫ НА ПЕРЕКРЕСТКЕ: укорачиваем луч до минимума, чтобы не бить в бока
+        // ЕСЛИ МЫ НА ПЕРЕКРЕСТКЕ: укорачиваем луч, чтобы не бить в бока
         if (isOnIntersection)
         {
-            actualMaxDistance = 0.5f;
+            actualMaxDistance = 1.2f;
         }
 
         // Считаем угол до цели
@@ -119,28 +129,27 @@ public class WaypointNavigator : MonoBehaviour
         float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
 
         bool carDetectedInFront = false;
+        float detectedCarDistance = float.MaxValue;
 
         Vector3 rayStart = transform.position + Vector3.up * 0.4f + transform.forward * 0.6f;
         Vector3 rayEnd = rayStart + transform.forward * actualMaxDistance;
 
-        // Throttle Physics.Raycast: на перекрёстке проверяем каждый кадр,
-        // вне перекрёстка — раз в 3 кадра (экономия CPU).
-        raycastFrameCounter++;
-        bool shouldRaycast = isOnIntersection || (raycastFrameCounter % RAYCAST_INTERVAL == 0);
-
-        // Если едем прямо И не на перекрестке (или на перекрестке, но с коротким лучом)
-        if (shouldRaycast && angleToTarget < turnAngleThreshold)
+        // Используем SphereCast вместо Raycast для более надёжного детектирования
+        // (ловит машины не только строго по лучу, но и сбоку)
+        if (angleToTarget < turnAngleThreshold)
         {
             RaycastHit hit;
             int layerMask = CreateLayerMask();
 
             Debug.DrawLine(rayStart, rayEnd, Color.red);
 
-            if (Physics.Raycast(rayStart, transform.forward, out hit, actualMaxDistance, layerMask))
+            // SphereCast — более надёжный, чем Raycast
+            if (Physics.SphereCast(rayStart, sphereCastRadius, transform.forward, out hit, actualMaxDistance, layerMask))
             {
                 if (hit.collider.gameObject != gameObject)
                 {
                     carDetectedInFront = true;
+                    detectedCarDistance = hit.distance;
                 }
             }
         }
@@ -151,6 +160,8 @@ public class WaypointNavigator : MonoBehaviour
 
         // Логика торможения
         float targetSpeed = originalSpeed;
+        bool emergencyStop = false;
+
         if (isStoppedByLight)
         {
             targetSpeed = 0f;
@@ -158,8 +169,19 @@ public class WaypointNavigator : MonoBehaviour
         }
         else if (carDetectedInFront)
         {
-            targetSpeed = 0f;
-            currentReason = "Держит дистанцию";
+            // Аварийное торможение, если слишком близко
+            if (detectedCarDistance < emergencyBrakeDistance)
+            {
+                emergencyStop = true;
+                currentReason = $"Аварийное торможение ({detectedCarDistance:F2}м)";
+            }
+            else
+            {
+                // Пропорциональное замедление: чем ближе, тем сильнее жмём тормоз
+                float brakeFactor = Mathf.Clamp01((detectedCarDistance - emergencyBrakeDistance) / (actualMaxDistance - emergencyBrakeDistance));
+                targetSpeed = originalSpeed * brakeFactor;
+                currentReason = $"Держит дистанцию ({detectedCarDistance:F2}м)";
+            }
         }
         else if (oncomingDetector != null && !oncomingDetector.IsClear && currentWaypointIndex == stopWaypointIndex)
         {
@@ -171,17 +193,39 @@ public class WaypointNavigator : MonoBehaviour
             }
         }
 
-        // Smoothly interpolate speed to prevent jerky changes
-        speed = Mathf.Lerp(speed, targetSpeed, speedSmoothing * Time.deltaTime);
+        // Аварийное торможение
+        if (emergencyStop)
+        {
+            speed = Mathf.Lerp(speed, 0f, emergencyBrakeStrength * Time.deltaTime);
+        }
+        else
+        {
+            // Smoothly interpolate speed to prevent jerky changes
+            speed = Mathf.Lerp(speed, targetSpeed, speedSmoothing * Time.deltaTime);
+        }
 
-        // Removed Debug.Log spam - was logging every state change every frame
-        // if (currentReason != lastStopReason)
-        // {
-        //     Debug.Log($"[{gameObject.name}] {currentReason}");
-        //     lastStopReason = currentReason;
-        // }
+        // Защита от застревания: если машина стоит на месте >2 секунд, пытаемся её расшевелить
+        float movedDistance = Vector3.Distance(transform.position, lastPosition);
+        if (movedDistance < 0.01f && speed > 0.1f)
+        {
+            stuckTimer += Time.deltaTime;
+            if (stuckTimer > STUCK_TIME_THRESHOLD)
+            {
+                // Впереди что-то мешает — пытаемся объехать
+                Debug.Log($"[{gameObject.name}] Застрял, пытаюсь объехать препятствие");
+                speed = originalSpeed * 0.3f;
+                
+                // Поворачиваем слегка, чтобы обойти
+                transform.Rotate(0, 30 * Time.deltaTime, 0);
+            }
+        }
+        else
+        {
+            stuckTimer = 0f;
+        }
+        lastPosition = transform.position;
 
-        if (speed < 0.1f) return;
+        if (speed < 0.05f) return;
 
         // Handle segment transition smoothing
         if (isTransitioning)

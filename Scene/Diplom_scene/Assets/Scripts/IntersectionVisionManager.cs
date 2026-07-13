@@ -98,48 +98,42 @@ public class IntersectionVisionManager : MonoBehaviour
                 }
             }
 
-            // Шаг 2: Schedule ВСЕХ инференсов сразу (GPU работает параллельно)
-            List<int> scheduledIndices = new List<int>();
+            // Шаг 2: Последовательный инференс для каждой камеры.
+            // ВАЖНО: PeekOutput() возвращает ОДИН И ТОТ ЖЕ тензор для всех Schedule.
+            // Нельзя сделать Schedule для всех камер сразу, а потом читать — 
+            // после первого Dispose() остальные упадут с NullReferenceException.
+            // Решение: Schedule → Readback → Dispose → следующая камера.
             for (int i = 0; i < capturedRTs.Count; i++)
             {
-                if (capturedRTs[i] != null)
-                {
-                    try
-                    {
-                        TextureConverter.ToTensor(capturedRTs[i], sharedInputTensor);
-                        sharedEngine.Schedule(sharedInputTensor);
-                        scheduledIndices.Add(i);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"[{intersectionId}] Schedule error camera {i}: {ex.Message}");
-                    }
-                }
-            }
+                if (capturedRTs[i] == null) continue;
 
-            // Шаг 3: Readback ПОСЛЕДОВАТЕЛЬНО для всех schedule'd инференсов
-            // GPU уже обработал пачку, мы только забираем результаты
-            for (int s = 0; s < scheduledIndices.Count; s++)
-            {
-                int idx = scheduledIndices[s];
                 try
                 {
+                    // Schedule для одной камеры
+                    TextureConverter.ToTensor(capturedRTs[i], sharedInputTensor);
+                    sharedEngine.Schedule(sharedInputTensor);
+
+                    // Ждём завершения инференса (yield не нужен — PeekOutput блокирует)
                     Tensor<float> outputTensor = sharedEngine.PeekOutput() as Tensor<float>;
                     if (outputTensor != null)
                     {
-                        int count = allCameras[idx].UpdateDetectionsAndGetCount(outputTensor);
-                        cameraResults[idx] = count;
+                        int count = allCameras[i].UpdateDetectionsAndGetCount(outputTensor);
+                        cameraResults[i] = count;
                         outputTensor.Dispose();
+                    }
+                    else
+                    {
+                        cameraResults[i] = 0;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[{intersectionId}] Readback error camera {idx}: {ex.Message}");
-                    cameraResults[idx] = 0;
+                    Debug.LogError($"[{intersectionId}] Inference error camera {i}: {ex.Message}");
+                    cameraResults[i] = 0;
                 }
             }
 
-            // Шаг 4: Отправляем batch телеметрию (1 POST вместо 4)
+            // Шаг 3: Отправляем batch телеметрию (1 POST вместо 4)
             yield return StartCoroutine(SendBatchTelemetry());
 
             // Освобождаем RenderTexture у камер
