@@ -35,7 +35,7 @@ class TrafficOrchestrator:
 
         if camera_id not in self.traffic_brains:
             self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, is_per_lane=True)
-            print(f"🧠 Создан контроллер для {camera_id}")
+            # print(f"🧠 Создан контроллер для {camera_id}")
 
         brain = self.traffic_brains[camera_id]
 
@@ -78,7 +78,7 @@ class TrafficOrchestrator:
         3. Сразу возвращаем ответы (без цикла по handle_telemetry!)
         """
         inter_id = batch.intersection_id
-        print(f"📥 [{inter_id}] Получен batch: {len(batch.cameras)} камер")
+        # print(f"📥 [{inter_id}] Получен batch: {len(batch.cameras)} камер")
         
         # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
         for cam in batch.cameras:
@@ -116,12 +116,12 @@ class TrafficOrchestrator:
             if data["intersection_id"] != inter_id:
                 continue
             lane_phase = traffic_network.get_phase_for_approach(inter_id, data["approach"])
-            print(f"  🔎 [{inter_id}] {lane_id} (approach {data['approach']}) → фаза {lane_phase}, машин: {data['car_count']}")
+            # print(f"  🔎 [{inter_id}] {lane_id} (approach {data['approach']}) → фаза {lane_phase}, машин: {data['car_count']}")
             if lane_phase in phase_cars:
                 phase_cars[lane_phase] += data["car_count"]
         
-        print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
-        print(f"  🔍 [{inter_id}] Lane pool: {[(k, v['approach'], v['car_count']) for k,v in traffic_network.lane_pool.items() if v['intersection_id'] == inter_id]}")
+        # print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
+        # print(f"  🔍 [{inter_id}] Lane pool: {[(k, v['approach'], v['car_count']) for k,v in traffic_network.lane_pool.items() if v['intersection_id'] == inter_id]}")
         
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)
@@ -133,29 +133,29 @@ class TrafficOrchestrator:
                         break
                 phase_state["active_phase"] = active_phase
                 phase_state["phase_start_time"] = time.time()
-                print(f"  🚦 [{inter_id}] Начальная фаза: {active_phase} {phase_cars}")
+                # print(f"  🚦 [{inter_id}] Начальная фаза: {active_phase} {phase_cars}")
         else:
             opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
             this = phase_cars.get(active_phase, 0)
             other = phase_cars.get(opposite, 0)
             
-            print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
+            # print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
             
             # Условие 1: на этой фазе нет машин, на другой есть → переключаем
             if elapsed >= phase_state["min_duration"] and this == 0 and other > 0:
-                print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (на {opposite} есть {other} машин)")
+                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (на {opposite} есть {other} машин)")
                 active_phase = opposite
                 phase_state["active_phase"] = opposite
                 phase_state["phase_start_time"] = time.time()
             # Условие 2: обе фазы пусты дольше 8с → переключаем
             elif elapsed >= phase_state["min_duration"] and this == 0 and other == 0:
-                print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (обе пусты, прошло {elapsed:.0f}с)")
+                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (обе пусты, прошло {elapsed:.0f}с)")
                 active_phase = opposite
                 phase_state["active_phase"] = opposite
                 phase_state["phase_start_time"] = time.time()
             # Условие 3: фаза горит дольше 30 секунд → принудительно переключаем
             elif elapsed >= phase_state.get("max_duration", 30.0):
-                print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (лимит {elapsed:.0f}с, машин: {this})")
+                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (лимит {elapsed:.0f}с, машин: {this})")
                 active_phase = opposite
                 phase_state["active_phase"] = opposite
                 phase_state["phase_start_time"] = time.time()
@@ -201,5 +201,5 @@ class TrafficOrchestrator:
             if self.ws_manager:
                 await self.ws_manager.broadcast(json.dumps(ui_payload))
 
-        print(f"  📤 [{inter_id}] Ответ: {active_phase} на {green_duration:.1f}с для {len([r for r in responses if r.target_phase == 'GREEN'])} зелёных")
+        # print(f"  📤 [{inter_id}] Ответ: {active_phase} на {green_duration:.1f}с для {len([r for r in responses if r.target_phase == 'GREEN'])} зелёных")
         return responses

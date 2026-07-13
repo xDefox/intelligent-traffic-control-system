@@ -24,14 +24,14 @@ class CloudOrchestrator:
         if not self._running:
             self._running = True
             self._tick_task = asyncio.create_task(self._tick_loop())
-            print("[CloudOrchestrator] Запущен (тикер раз в 1с)")
+            # print("[CloudOrchestrator] Запущен (тикер раз в 1с)")
 
     async def stop(self):
         """Остановить тикер"""
         self._running = False
         if self._tick_task:
             self._tick_task.cancel()
-        print("[CloudOrchestrator] Остановлен")
+        # print("[CloudOrchestrator] Остановлен")
 
     async def _tick_loop(self):
         """Фоновый цикл: анализ графа и рассылка команд"""
@@ -39,7 +39,7 @@ class CloudOrchestrator:
             try:
                 await self._cascade_tick()
             except Exception as e:
-                print(f"❌ [CloudOrchestrator] Ошибка тика: {e}")
+                 print(f"❌ [CloudOrchestrator] Ошибка тика: {e}")
 
             await asyncio.sleep(1.0)
 
@@ -61,9 +61,9 @@ class CloudOrchestrator:
             await self.ws_manager.broadcast(json.dumps(state_payload))
 
         # 3. Если есть команды — логируем
-        if commands:
-            for cmd in commands:
-                print(f"  ☁️ [Cloud] Команда: {cmd['target_intersection']} -> {cmd['action']}")
+        # if commands:
+        #     for cmd in commands:
+        #         print(f"  ☁️ [Cloud] Команда: {cmd['target_intersection']} -> {cmd['action']}")
 
     def get_cascade_commands(self) -> List[dict]:
         """Последние каскадные команды (для Fog-контроллеров)"""

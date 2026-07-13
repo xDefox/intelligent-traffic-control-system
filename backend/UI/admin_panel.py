@@ -87,11 +87,12 @@ class TrafficUIFactory:
                         try:
                             self.update_ui_state(data)
                         except Exception as ui_err:
-                            print("❌ Ошибка отрисовки внутри update_ui_state:")
-                            traceback.print_exc()
+                            # print("❌ Ошибка отрисовки внутри update_ui_state:")
+                            # traceback.print_exc()
+                            pass
 
             except Exception as net_err:
-                print(f"📡 Ошибка сети Веб-сокета: {net_err}")
+                # print(f"📡 Ошибка сети Веб-сокета: {net_err}")
                 self.status_text.value = "ПОТЕРЯ СВЯЗИ С UTC БЭКЕНДОМ..."
                 self.status_text.color = "red"
                 if self.page:

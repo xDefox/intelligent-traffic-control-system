@@ -16,6 +16,10 @@ public class IntersectionManager : MonoBehaviour
     public float yellowDuration = 2f;
     public float xGreenDuration = 8f;
 
+    [Header("Отладка")]
+    [Tooltip("Включить логи отладки")]
+    public bool enableDebugLogs = false;
+
     public enum IntersectionPhase { Z_Green, YellowBeforeX, X_Green, YellowBeforeZ }
     private IntersectionPhase currentPhase = IntersectionPhase.Z_Green;
 
@@ -103,23 +107,23 @@ public class IntersectionManager : MonoBehaviour
             StopCoroutine(cycleCoroutine);
             cycleCoroutine = null;
             useAutonomousCycle = false;
-            Debug.Log("[IntersectionManager] Переключено на внешнее управление ИИ (FastAPI).");
+            if (enableDebugLogs) Debug.Log("[IntersectionManager] Переключено на внешнее управление ИИ (FastAPI).");
         }
 
         // Определяем, к какой оси относится laneId
         bool isXAxis = IsXAxisLane(laneId);
         string axisName = isXAxis ? "X" : "Z";
         
-        Debug.Log($"[IntersectionManager] 📥 Команда для {laneId}: {command} (ось {axisName}, duration={greenDuration}с)");
+        if (enableDebugLogs) Debug.Log($"[IntersectionManager] 📥 Команда для {laneId}: {command} (ось {axisName}, duration={greenDuration}с)");
         
         if (isXAxis && xIsTransitioning) 
         {
-            Debug.Log($"[IntersectionManager] ⏸️ X-axis в переходе, пропускаем");
+            if (enableDebugLogs) Debug.Log($"[IntersectionManager] ⏸️ X-axis в переходе, пропускаем");
             return;
         }
         if (!isXAxis && zIsTransitioning) 
         {
-            Debug.Log($"[IntersectionManager] ⏸️ Z-axis в переходе, пропускаем");
+            if (enableDebugLogs) Debug.Log($"[IntersectionManager] ⏸️ Z-axis в переходе, пропускаем");
             return;
         }
 
@@ -188,12 +192,12 @@ public class IntersectionManager : MonoBehaviour
             if (isXAxis)
             {
                 xGreenRemaining = Mathf.Max(xGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
-                Debug.Log($"[IntersectionManager] X-axis зелёный продлён: +{greenDuration}с (Z выключен)");
+                if (enableDebugLogs) Debug.Log($"[IntersectionManager] X-axis зелёный продлён: +{greenDuration}с (Z выключен)");
             }
             else
             {
                 zGreenRemaining = Mathf.Max(zGreenRemaining, greenDuration > 0 ? greenDuration : 5f);
-                Debug.Log($"[IntersectionManager] Z-axis зелёный продлён: +{greenDuration}с (X выключен)");
+                if (enableDebugLogs) Debug.Log($"[IntersectionManager] Z-axis зелёный продлён: +{greenDuration}с (X выключен)");
             }
             if (isXAxis) xIsTransitioning = false;
             else zIsTransitioning = false;
@@ -220,7 +224,7 @@ public class IntersectionManager : MonoBehaviour
         {
             xAxisState = AxisState.Green;
             xGreenRemaining = greenDuration > 0 ? greenDuration : 5f;
-            Debug.Log($"[IntersectionManager] X-axis зелёный на {xGreenRemaining}с");
+            if (enableDebugLogs) Debug.Log($"[IntersectionManager] X-axis зелёный на {xGreenRemaining}с");
             
             // Запускаем таймер на смену
             if (xGreenCoroutine != null) StopCoroutine(xGreenCoroutine);
@@ -230,7 +234,7 @@ public class IntersectionManager : MonoBehaviour
         {
             zAxisState = AxisState.Green;
             zGreenRemaining = greenDuration > 0 ? greenDuration : 5f;
-            Debug.Log($"[IntersectionManager] Z-axis зелёный на {zGreenRemaining}с");
+            if (enableDebugLogs) Debug.Log($"[IntersectionManager] Z-axis зелёный на {zGreenRemaining}с");
             
             if (zGreenCoroutine != null) StopCoroutine(zGreenCoroutine);
             zGreenCoroutine = StartCoroutine(GreenTimer(isXAxis));
@@ -276,7 +280,7 @@ public class IntersectionManager : MonoBehaviour
             SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
             xAxisState = AxisState.Red;
             xGreenCoroutine = null;
-            Debug.Log("[IntersectionManager] X-axis зелёный истёк → RED");
+            if (enableDebugLogs) Debug.Log("[IntersectionManager] X-axis зелёный истёк → RED");
         }
         else
         {
@@ -285,7 +289,7 @@ public class IntersectionManager : MonoBehaviour
             SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
             zAxisState = AxisState.Red;
             zGreenCoroutine = null;
-            Debug.Log("[IntersectionManager] Z-axis зелёный истёк → RED");
+            if (enableDebugLogs) Debug.Log("[IntersectionManager] Z-axis зелёный истёк → RED");
         }
 
         if (isXAxis) xIsTransitioning = false;

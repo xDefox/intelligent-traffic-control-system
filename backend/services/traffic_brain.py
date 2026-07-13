@@ -89,7 +89,7 @@ class AdaptiveTrafficBrain:
             if self._current_command != "RED":
                 self._current_command = "RED"
                 self._green_start_time = 0
-                print(f"  🔴 [{lane_id}] RED (фаза {self._phase_name} не активна, активна {active_phase})")
+                # print(f"  🔴 [{lane_id}] RED (фаза {self._phase_name} не активна, активна {active_phase})")
             return "RED", 0.0
         
         # Наша фаза активна → зелёный
@@ -116,7 +116,7 @@ class AdaptiveTrafficBrain:
                 self._green_start_time = time.time()
                 self._last_sent_duration = green_duration
                 self._last_green_decision_time = time.time()
-                print(f"  🟢 [{lane_id}] GREEN на {green_duration:.1f}с (машины: {self._last_car_count})")
+                # print(f"  🟢 [{lane_id}] GREEN на {green_duration:.1f}с (машины: {self._last_car_count})")
                 return "GREEN", green_duration
             else:
                 # Продление
@@ -147,9 +147,9 @@ class AdaptiveTrafficBrain:
             reduce_by = command.get("reduce_green_by", 5)
             self._min_green_duration = max(3.0, 8.0 - reduce_by)
             self._max_green_duration = max(10.0, 25.0 - reduce_by)
-            print(f"  ⏱️  Урезан до {self._min_green_duration:.0f}с")
+            # print(f"  ⏱️  Урезан до {self._min_green_duration:.0f}с")
         elif action == "GREEN_WAVE":
             extend_by = command.get("extend_green_by", 3)
             self._min_green_duration = 15.0 + extend_by
             self._max_green_duration = 30.0 + extend_by
-            print(f"  🟢  Зелёная волна +{extend_by}с")
+            # print(f"  🟢  Зелёная волна +{extend_by}с")
