@@ -42,7 +42,12 @@ def _get_all_lane_ids() -> List[str]:
 
 
 def _resolve_intersection_and_approach(lane_id: str) -> Tuple[str, str]:
-    """Из lane_id вида 'intersection_1_approach_0' достать (intersection_id, approach)"""
+    """Из lane_id вида 'intersection_1_approach_0' или 'lane_intersection_1_approach_0' 
+    достать (intersection_id, approach)"""
+    # Убираем префикс "lane_" если есть
+    if lane_id.startswith("lane_"):
+        lane_id = lane_id[5:]  # Убираем "lane_"
+    
     # Ищем последнее _approach_
     idx = lane_id.find("_approach_")
     if idx == -1:

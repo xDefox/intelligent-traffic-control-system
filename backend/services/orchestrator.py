@@ -10,6 +10,7 @@ from backend.services.traffic_brain import (
 )
 from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
+from backend.services.green_wave import green_wave_coordinator
 import time
 
 
@@ -90,6 +91,9 @@ class TrafficOrchestrator:
         inter_id = batch.intersection_id
         # print(f"📥 [{inter_id}] Получен batch: {len(batch.cameras)} камер")
         
+        # Получаем команды зелёной волны
+        green_wave_commands = green_wave_coordinator.calculate_green_wave()
+        
         # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
         for cam in batch.cameras:
             for lane in cam.lanes:
@@ -115,11 +119,18 @@ class TrafficOrchestrator:
                 "min_duration": 8.0,
                 "max_duration": 30.0,
             }
-        
+            
         phase_state = self._intersection_phase_states[inter_id]
         active_phase = phase_state.get("active_phase")
         phase_start_time = phase_state.get("phase_start_time", 0)
         elapsed = time.time() - phase_start_time if active_phase else 999
+        
+        # Проверяем, есть ли команда зелёной волны для этого перекрёстка
+        green_wave_override = None
+        for gw_cmd in green_wave_commands:
+            if gw_cmd.get("target_intersection") == inter_id:
+                green_wave_override = gw_cmd
+                break
         
         # Считаем машины на каждой фазе
         phase_cars = {pn: 0 for pn in phase_names}
@@ -133,6 +144,26 @@ class TrafficOrchestrator:
         
         # print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
         # print(f"  🔍 [{inter_id}] Lane pool: {[(k, v['approach'], v['car_count']) for k,v in traffic_network.lane_pool.items() if v['intersection_id'] == inter_id]}")
+        
+        # Применяем зелёную волну если есть команда
+        if green_wave_override:
+            gw_phase = green_wave_override.get("phase")
+            gw_offset = green_wave_override.get("offset", 0.0)
+            
+            # Проверяем, поддерживается ли эта фаза на перекрёстке
+            if gw_phase in phase_names:
+                # Рассчитываем, должна ли сейчас гореть зелёная волна
+                # Используем offset как сдвиг времени начала цикла
+                cycle_time = 60.0  # Полный цикл светофора (примерно)
+                normalized_time = (time.time() + gw_offset) % cycle_time
+                
+                # Зелёная волна активна в определённом окне времени
+                # Простое правило: если offset < 15 секунд, то эта фаза должна быть активна
+                if gw_offset < 15.0:
+                    active_phase = gw_phase
+                    phase_state["active_phase"] = active_phase
+                    phase_state["phase_start_time"] = time.time()
+                print(f"  🟢 [{inter_id}] GREEN WAVE: фаза {active_phase} (offset {gw_offset:.1f}с)")
         
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)
@@ -209,8 +240,6 @@ class TrafficOrchestrator:
             ))
             
             # UI — обогащённое сообщение
-            # UI — обогащённое сообщение
-            # UI — обогащённое сообщение
             ui_lanes = []
             for lane in cam.lanes:
                 lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
@@ -226,6 +255,17 @@ class TrafficOrchestrator:
                 })
 
             phase_elapsed = round(elapsed, 1) if active_phase else 0.0
+            
+            # Добавляем информацию о зелёной волне
+            green_wave_info = None
+            if green_wave_override:
+                green_wave_info = {
+                    "active": True,
+                    "phase": green_wave_override.get("phase"),
+                    "offset": green_wave_override.get("offset", 0.0),
+                    "corridor": green_wave_override.get("corridor", []),
+                }
+            
             ui_payload = {
                 "type": "lane_update",
                 "intersection_id": inter_id,
@@ -235,6 +275,7 @@ class TrafficOrchestrator:
                 "green_duration": dur,
                 "phase_elapsed": phase_elapsed,
                 "lanes": ui_lanes,
+                "green_wave": green_wave_info,
             }
             if self.ws_manager:
                 await self.ws_manager.broadcast(json.dumps(ui_payload))

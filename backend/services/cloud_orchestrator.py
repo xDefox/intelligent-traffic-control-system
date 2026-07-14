@@ -4,6 +4,7 @@ import json
 from typing import Dict, List
 from backend.services.graph_manager import traffic_network
 from backend.services.traffic_brain import AdaptiveTrafficBrain
+from backend.services.green_wave import green_wave_coordinator
 
 
 class CloudOrchestrator:
@@ -45,6 +46,11 @@ class CloudOrchestrator:
 
     async def _cascade_tick(self):
         commands = traffic_network.calculate_cascade()
+        
+        # Добавляем команды зелёной волны
+        green_wave_commands = green_wave_coordinator.calculate_green_wave()
+        commands.extend(green_wave_commands)
+        
         self._last_cascade_commands = commands
 
         # Считаем агрегаты
@@ -63,12 +69,17 @@ class CloudOrchestrator:
             inter_summary[iid]["avg_congestion"] /= max(lanes, 1)
 
         if self.ws_manager:
+            # Подсчитываем активные зелёные волны
+            active_waves = [c for c in commands if c.get("action") == "GREEN_WAVE_SYNC"]
+            green_wave_active = len(active_waves) > 0
+            
             state_payload = {
                 "type": "cloud_state",
                 "total_cars_on_network": total_cars,
                 "intersections_summary": inter_summary,
                 "cascade_commands": commands,
-                "green_wave_active": any(c["action"] == "GREEN_WAVE" for c in commands),
+                "green_wave_active": green_wave_active,
+                "green_wave_corridors": [c.get("corridor", []) for c in active_waves],
             }
             await self.ws_manager.broadcast(json.dumps(state_payload))
 
