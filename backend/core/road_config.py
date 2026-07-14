@@ -42,6 +42,22 @@ ROADS = {
             },
         },
     },
+    "intersection_3": {
+        "type": "X",
+        "position": {"x": 50, "z": 0},
+        "phases": {
+            "NS": {
+                "approaches": ["approach_2", "approach_3"],
+                "min_duration": 5.0,
+                "max_duration": 30.0,
+            },
+            "EW": {
+                "approaches": ["approach_0", "approach_1"],
+                "min_duration": 5.0,
+                "max_duration": 30.0,
+            },
+        },
+    },
     
     # ========== СВЯЗИ МЕЖДУ ПЕРЕКРЁСТКАМИ ==========
     "links": [
@@ -49,5 +65,9 @@ ROADS = {
         "lane_intersection_1_approach_1 -> lane_intersection_2_approach_0",
         # Обратно: Intersection_2 (подход 1, восток) → Intersection_1 (подход 0, запад)
         "lane_intersection_2_approach_1 -> lane_intersection_1_approach_0",
+        # Intersection_2 (подход 1, восток) → Intersection_3 (подход 0, запад)
+        "lane_intersection_2_approach_1 -> lane_intersection_3_approach_0",
+        # Обратно: Intersection_3 (подход 1, восток) → Intersection_2 (подход 0, запад)
+        "lane_intersection_3_approach_1 -> lane_intersection_2_approach_0",
     ],
 }

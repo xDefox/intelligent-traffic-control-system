@@ -135,30 +135,38 @@ class TrafficOrchestrator:
                 phase_state["phase_start_time"] = time.time()
                 # print(f"  🚦 [{inter_id}] Начальная фаза: {active_phase} {phase_cars}")
         else:
-            opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
-            this = phase_cars.get(active_phase, 0)
-            other = phase_cars.get(opposite, 0)
-            
-            # print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
-            
-            # Условие 1: на этой фазе нет машин, на другой есть → переключаем
-            if elapsed >= phase_state["min_duration"] and this == 0 and other > 0:
-                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (на {opposite} есть {other} машин)")
-                active_phase = opposite
-                phase_state["active_phase"] = opposite
-                phase_state["phase_start_time"] = time.time()
-            # Условие 2: обе фазы пусты дольше 8с → переключаем
-            elif elapsed >= phase_state["min_duration"] and this == 0 and other == 0:
-                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (обе пусты, прошло {elapsed:.0f}с)")
-                active_phase = opposite
-                phase_state["active_phase"] = opposite
-                phase_state["phase_start_time"] = time.time()
-            # Условие 3: фаза горит дольше 30 секунд → принудительно переключаем
-            elif elapsed >= phase_state.get("max_duration", 30.0):
-                # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (лимит {elapsed:.0f}с, машин: {this})")
-                active_phase = opposite
-                phase_state["active_phase"] = opposite
-                phase_state["phase_start_time"] = time.time()
+            # Режим одного направления: только одна фаза, просто держим её зелёной
+            if len(phase_names) == 1:
+                # Одна фаза - всегда зелёная, просто сбрасываем таймер если нужно
+                if elapsed >= phase_state.get("max_duration", 30.0):
+                    # print(f"  🔄 [{inter_id}] Перезапуск фазы {active_phase} (лимит {elapsed:.0f}с)")
+                    phase_state["phase_start_time"] = time.time()
+            else:
+                # Две фазы - стандартная логика переключения
+                opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
+                this = phase_cars.get(active_phase, 0)
+                other = phase_cars.get(opposite, 0)
+                
+                # print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
+                
+                # Условие 1: на этой фазе нет машин, на другой есть → переключаем
+                if elapsed >= phase_state["min_duration"] and this == 0 and other > 0:
+                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (на {opposite} есть {other} машин)")
+                    active_phase = opposite
+                    phase_state["active_phase"] = opposite
+                    phase_state["phase_start_time"] = time.time()
+                # Условие 2: обе фазы пусты дольше 8с → переключаем
+                elif elapsed >= phase_state["min_duration"] and this == 0 and other == 0:
+                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (обе пусты, прошло {elapsed:.0f}с)")
+                    active_phase = opposite
+                    phase_state["active_phase"] = opposite
+                    phase_state["phase_start_time"] = time.time()
+                # Условие 3: фаза горит дольше 30 секунд → принудительно переключаем
+                elif elapsed >= phase_state.get("max_duration", 30.0):
+                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (лимит {elapsed:.0f}с, машин: {this})")
+                    active_phase = opposite
+                    phase_state["active_phase"] = opposite
+                    phase_state["phase_start_time"] = time.time()
         
         # ШАГ 4: Длительность зелёного
         total_cars = sum(phase_cars.values())
