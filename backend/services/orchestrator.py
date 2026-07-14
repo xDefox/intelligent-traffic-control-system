@@ -35,7 +35,6 @@ class TrafficOrchestrator:
 
         if camera_id not in self.traffic_brains:
             self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, is_per_lane=True)
-            # print(f"🧠 Создан контроллер для {camera_id}")
 
         brain = self.traffic_brains[camera_id]
 
@@ -46,6 +45,13 @@ class TrafficOrchestrator:
 
         target_command, green_duration = brain.process_lane_telemetry(update)
 
+        # Определяем активную фазу для этого перекрёстка
+        # Определяем активную фазу
+        approach = camera_id.replace(f"{inter_id}_", "")
+        lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
+        phase_state = _get_intersection_phase_state(inter_id)
+        active_phase = phase_state.get("active_phase", "UNKNOWN")
+
         ui_lanes = []
         for lane in update.lanes:
             lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
@@ -55,6 +61,8 @@ class TrafficOrchestrator:
                 "avg_speed": lane.avg_speed,
                 "load_pct": int(lane_state.get("congestion_index", 0) * 100),
                 "light": target_command,
+                "phase_name": lane_phase or "UNKNOWN",
+                "max_capacity": lane.max_capacity,
             })
 
         ui_payload = {
@@ -62,6 +70,8 @@ class TrafficOrchestrator:
             "intersection_id": inter_id,
             "lane_id": camera_id,
             "command": target_command,
+            "current_phase": active_phase,
+            "green_duration": green_duration,
             "lanes": ui_lanes,
         }
         if self.ws_manager:
@@ -108,7 +118,8 @@ class TrafficOrchestrator:
         
         phase_state = self._intersection_phase_states[inter_id]
         active_phase = phase_state.get("active_phase")
-        elapsed = time.time() - phase_state.get("phase_start_time", 0) if active_phase else 999
+        phase_start_time = phase_state.get("phase_start_time", 0)
+        elapsed = time.time() - phase_start_time if active_phase else 999
         
         # Считаем машины на каждой фазе
         phase_cars = {pn: 0 for pn in phase_names}
@@ -197,14 +208,33 @@ class TrafficOrchestrator:
                 green_duration=dur,
             ))
             
-            # UI
+            # UI — обогащённое сообщение
+            # UI — обогащённое сообщение
+            # UI — обогащённое сообщение
+            ui_lanes = []
+            for lane in cam.lanes:
+                lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
+                lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
+                ui_lanes.append({
+                    "lane_id": lane.lane_id,
+                    "car_count": lane.car_count,
+                    "avg_speed": lane.avg_speed,
+                    "load_pct": int(lane_state.get("congestion_index", 0) * 100),
+                    "light": cmd,
+                    "phase_name": lane_phase or "UNKNOWN",
+                    "max_capacity": lane_state.get("max_capacity", 10),
+                })
+
+            phase_elapsed = round(elapsed, 1) if active_phase else 0.0
             ui_payload = {
                 "type": "lane_update",
                 "intersection_id": inter_id,
                 "lane_id": cam.camera_id,
                 "command": cmd,
-                "lanes": [{"lane_id": l.lane_id, "car_count": l.car_count, 
-                          "avg_speed": l.avg_speed, "load_pct": 0, "light": cmd} for l in cam.lanes],
+                "current_phase": active_phase or "UNKNOWN",
+                "green_duration": dur,
+                "phase_elapsed": phase_elapsed,
+                "lanes": ui_lanes,
             }
             if self.ws_manager:
                 await self.ws_manager.broadcast(json.dumps(ui_payload))

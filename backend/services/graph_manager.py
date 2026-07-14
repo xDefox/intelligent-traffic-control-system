@@ -101,7 +101,7 @@ class CityTrafficGraph:
                 "car_count": 0,
                 "avg_speed": 0.0,
                 "congestion_index": 0.0,
-                "max_capacity": 10,
+                "max_capacity": 5,
             }
 
         # 3. Добавляем связи
@@ -120,7 +120,7 @@ class CityTrafficGraph:
     # ===================== ОБНОВЛЕНИЕ СОСТОЯНИЯ =====================
 
     def update_lane_state(self, lane_id: str, car_count: int,
-                          avg_speed: float = 0.0, max_capacity: int = 10) -> float:
+                          avg_speed: float = 0.0, max_capacity: int = 5) -> float:
         """Обновить состояние полосы от камеры. Вернуть congestion_index."""
         if lane_id not in self.lane_pool:
             return 0.0
