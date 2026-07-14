@@ -9,8 +9,8 @@ public class TrafficGenerator : MonoBehaviour
         public string name;
         [Tooltip("Точка, где физически появится машина (обычно в самом начале дороги)")]
         public Transform spawnPoint;
-        [Tooltip("Стартовая полоса (перетаскивать сюда объект Lane_Forward нужной дороги)")]
-        public RoadSegment startSegment;
+        [Tooltip("Стартовый waypoint (перетаскивать сюда первый WaypointNode дороги)")]
+        public WaypointNode startWaypoint;
     }
 
     [Header("Настройки префабов машин")]
@@ -57,7 +57,7 @@ public class TrafficGenerator : MonoBehaviour
         // Выбираем случайную точку въезда из списка
         SpawnRoute selectedRoute = spawnRoutes[Random.Range(0, spawnRoutes.Count)];
 
-        if (selectedRoute.startSegment == null || selectedRoute.spawnPoint == null) return;
+        if (selectedRoute.startWaypoint == null || selectedRoute.spawnPoint == null) return;
 
         // Проверяем, нет ли уже машины на спаунпоинте (радиус 0.7м)
         Collider[] hitColliders = Physics.OverlapSphere(selectedRoute.spawnPoint.position, 0.7f);
@@ -79,8 +79,8 @@ public class TrafficGenerator : MonoBehaviour
         WaypointNavigator navigator = car.GetComponent<WaypointNavigator>();
         if (navigator != null)
         {
-            // Передаем машине сегмент дороги. Настройки ПДД она подтянет из него автоматически
-            navigator.SetupSegment(selectedRoute.startSegment, true);
+            // Передаем машине начальный waypoint
+            navigator.SetupNode(selectedRoute.startWaypoint);
         }
     }
     
