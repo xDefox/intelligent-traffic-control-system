@@ -53,6 +53,9 @@ public class WaypointNavigator : MonoBehaviour
     private float deadlockPauseTimer = 0f;
     private bool isInDeadlockPause = false;
 
+    // Стоп-триггер светофора
+    private bool isOnIntersection = false;
+
     void Start()
     {
         originalSpeed = speed;
@@ -83,6 +86,24 @@ public class WaypointNavigator : MonoBehaviour
 
         // Движение к текущему waypoint
         MoveToCurrentNode();
+    }
+
+    /// <summary>
+    /// Вызывается из триггер-зоны светофора — остановить машину если красный
+    /// </summary>
+    public void StopForTrafficLight(TrafficLightViewer light)
+    {
+        isStoppedByLight = true;
+        currentTrafficLight = light;
+    }
+
+    /// <summary>
+    /// Вызывается из триггер-зоны светофора — машина проехала, можно Resume
+    /// </summary>
+    public void ResumeFromTrafficLight()
+    {
+        isStoppedByLight = false;
+        currentTrafficLight = null;
     }
 
     /// <summary>
@@ -204,6 +225,43 @@ public class WaypointNavigator : MonoBehaviour
         {
             // Нет куда ехать - уничтожаем машину
             Destroy(gameObject);
+        }
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        if (other.CompareTag("StopTrigger"))
+        {
+            // Пока мы стоим или тремся в триггере стоп-линии — ещё НЕ на перекрёстке
+            isOnIntersection = false;
+
+            TrafficLightViewer trafficLight = other.GetComponentInParent<TrafficLightViewer>();
+            if (trafficLight != null)
+            {
+                TrafficLightViewer.LightColor currentLight = trafficLight.GetCurrentLight();
+                if (currentLight == TrafficLightViewer.LightColor.Red || currentLight == TrafficLightViewer.LightColor.Yellow)
+                {
+                    isStoppedByLight = true;
+                    currentTrafficLight = trafficLight;
+                }
+                else
+                {
+                    isStoppedByLight = false;
+                    currentTrafficLight = null;
+                }
+            }
+        }
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("StopTrigger"))
+        {
+            isStoppedByLight = false;
+            currentTrafficLight = null;
+
+            // Выехали из триггера стоп-линии -> выехали НА перекрёсток!
+            isOnIntersection = true;
         }
     }
 

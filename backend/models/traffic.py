@@ -39,17 +39,3 @@ class BatchResponseDTO(BaseModel):
     """Ответ на batch-телеметрию"""
     type: str = "batch_response"
     responses: List[SingleResponseDTO]
-
-
-class BackendResponseDTO(BaseModel):
-    """Ответ backend'а на телеметрию от камеры"""
-    target_phase: str                    # "GREEN" или "RED"
-    green_duration: float = 0.0          # Длительность зелёного в секундах (0 = авто)
-    confidence: float = 1.0              # Уверенность решения (0..1)
-
-
-class CloudStateDTO(BaseModel):
-    """Полное состояние системы для UI"""
-    intersections: dict = {}
-    cascade_commands: list = []
-    green_wave_active: bool = False

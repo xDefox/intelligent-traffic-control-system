@@ -225,8 +225,9 @@ class TrafficOrchestrator:
                 active_approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
                 break
         
-        # ШАГ 6: Формируем ответы (БЕЗ вызова handle_telemetry!)
+        # ШАГ 6: Формируем ответы (БЕЗ вызова handle_telemetry!) и одно UI-сообщение
         responses = []
+        batch_ui_payloads = []
         for cam in batch.cameras:
             approach = cam.camera_id.replace(f"{inter_id}_", "")
             is_active = approach in active_approaches
@@ -256,7 +257,6 @@ class TrafficOrchestrator:
 
             phase_elapsed = round(elapsed, 1) if active_phase else 0.0
             
-            # Добавляем информацию о зелёной волне
             green_wave_info = None
             if green_wave_override:
                 green_wave_info = {
@@ -266,7 +266,7 @@ class TrafficOrchestrator:
                     "corridor": green_wave_override.get("corridor", []),
                 }
             
-            ui_payload = {
+            batch_ui_payloads.append({
                 "type": "lane_update",
                 "intersection_id": inter_id,
                 "lane_id": cam.camera_id,
@@ -276,9 +276,16 @@ class TrafficOrchestrator:
                 "phase_elapsed": phase_elapsed,
                 "lanes": ui_lanes,
                 "green_wave": green_wave_info,
-            }
-            if self.ws_manager:
-                await self.ws_manager.broadcast(json.dumps(ui_payload))
+            })
 
-        # print(f"  📤 [{inter_id}] Ответ: {active_phase} на {green_duration:.1f}с для {len([r for r in responses if r.target_phase == 'GREEN'])} зелёных")
+        # Одно broadcast-сообщение для всех камер перекрёстка
+        if self.ws_manager and batch_ui_payloads:
+            await self.ws_manager.broadcast(json.dumps({
+                "type": "batch_lane_update",
+                "intersection_id": inter_id,
+                "current_phase": active_phase or "UNKNOWN",
+                "phase_elapsed": round(elapsed, 1) if active_phase else 0.0,
+                "cameras": batch_ui_payloads,
+            }))
+
         return responses
