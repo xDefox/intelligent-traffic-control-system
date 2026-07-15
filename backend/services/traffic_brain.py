@@ -5,12 +5,13 @@ from backend.services.graph_manager import traffic_network
 import time
 
 
-# Глобальный словарь для координации фаз НА ОДНОМ перекрёстке
+# Внутреннее состояние фаз для per-lane режима (только для AdaptiveTrafficBrain)
+# Оркестратор использует PhaseManager — единый источник истины
 _intersection_phase_state: Dict[str, dict] = {}
 
 
 def _get_intersection_phase_state(intersection_id: str) -> dict:
-    """Получить или создать состояние фазы для перекрёстка"""
+    """Получить или создать состояние фазы для перекрёстка (локально для per-lane)"""
     if intersection_id not in _intersection_phase_state:
         _intersection_phase_state[intersection_id] = {
             "active_phase": None,
@@ -62,7 +63,7 @@ class AdaptiveTrafficBrain:
         Фазу НЕ переключает — только проверяет, активна ли его фаза.
         """
         if not self.is_per_lane:
-            return self.process_telemetry(update), 0.0
+            return "RED", 0.0
         
         for lane in update.lanes:
             traffic_network.update_lane_state(
@@ -136,12 +137,6 @@ class AdaptiveTrafficBrain:
                 self._last_green_decision_time = time.time()
                 return "GREEN", 8.0
             return "GREEN", 0.0
-
-    def process_telemetry(self, update: IntersectionUpdateDTO) -> str:
-        """Legacy"""
-        for lane in update.lanes:
-            traffic_network.update_lane_state(lane_id=lane.lane_id, car_count=lane.car_count, avg_speed=lane.avg_speed, max_capacity=lane.max_capacity)
-        return "NS"
 
     def apply_cascade_command(self, command: dict):
         action = command.get("action", "")

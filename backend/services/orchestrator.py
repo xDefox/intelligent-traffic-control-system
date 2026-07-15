@@ -4,13 +4,11 @@ from typing import Dict, List
 from backend.models.traffic import (
     IntersectionUpdateDTO, BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
 )
-from backend.services.traffic_brain import (
-    AdaptiveTrafficBrain,
-    _get_intersection_phase_state,
-)
+from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
+from backend.services.phase_manager import PhaseManager
 import time
 
 
@@ -20,14 +18,15 @@ class TrafficOrchestrator:
     
     Dubai-style: каждый светофор имеет независимый контроллер (per-lane).
     Но при batch: одно решение на перекрёсток.
+    
+    Фазы управляются через PhaseManager (единый источник истины).
     """
 
     def __init__(self, ws_manager, cloud: CloudOrchestrator = None):
         self.traffic_brains: Dict[str, AdaptiveTrafficBrain] = {}
         self.ws_manager = ws_manager
         self.cloud = cloud
-        # Each intersection has its own independent phase state
-        self._intersection_phase_states: Dict[str, dict] = {}
+        self.phase_manager = PhaseManager()
 
     async def handle_telemetry(self, update: IntersectionUpdateDTO) -> dict:
         """Обработать телеметрию с одной камеры."""
@@ -44,14 +43,23 @@ class TrafficOrchestrator:
                 if cmd.get("target_intersection") == inter_id:
                     brain.apply_cascade_command(cmd)
 
-        target_command, green_duration = brain.process_lane_telemetry(update)
+        async with traffic_network.lane_pool_lock:
+            target_command, green_duration = brain.process_lane_telemetry(update)
 
-        # Определяем активную фазу для этого перекрёстка
-        # Определяем активную фазу
+        # Получаем фазу из единого PhaseManager
         approach = camera_id.replace(f"{inter_id}_", "")
         lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
-        phase_state = _get_intersection_phase_state(inter_id)
-        active_phase = phase_state.get("active_phase", "UNKNOWN")
+        
+        # Синхронизация: в per-lane режиме фаза хранится в traffic_brain._get_intersection_phase_state,
+        # переносим в PhaseManager для единого доступа
+        from backend.services.traffic_brain import _get_intersection_phase_state
+        brain_phase_state = _get_intersection_phase_state(inter_id)
+        brain_active = brain_phase_state.get("active_phase")
+        phase_state = self.phase_manager.get_or_create(inter_id)
+        if brain_active is not None and brain_active != phase_state.active_phase:
+            self.phase_manager.switch_phase(inter_id, brain_active)
+            phase_state = self.phase_manager.get_or_create(inter_id)
+        active_phase = phase_state.active_phase or "UNKNOWN"
 
         ui_lanes = []
         for lane in update.lanes:
@@ -89,20 +97,20 @@ class TrafficOrchestrator:
         3. Сразу возвращаем ответы (без цикла по handle_telemetry!)
         """
         inter_id = batch.intersection_id
-        # print(f"📥 [{inter_id}] Получен batch: {len(batch.cameras)} камер")
         
         # Получаем команды зелёной волны
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
         
         # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
-        for cam in batch.cameras:
-            for lane in cam.lanes:
-                traffic_network.update_lane_state(
-                    lane_id=lane.lane_id,
-                    car_count=lane.car_count,
-                    avg_speed=lane.avg_speed,
-                    max_capacity=lane.max_capacity,
-                )
+        async with traffic_network.lane_pool_lock:
+            for cam in batch.cameras:
+                for lane in cam.lanes:
+                    traffic_network.update_lane_state(
+                        lane_id=lane.lane_id,
+                        car_count=lane.car_count,
+                        avg_speed=lane.avg_speed,
+                        max_capacity=lane.max_capacity,
+                    )
         
         # ШАГ 2: Конфиг фаз
         phases_config = traffic_network.intersection_phases.get(inter_id, {})
@@ -111,19 +119,10 @@ class TrafficOrchestrator:
         if not phase_names:
             return [SingleResponseDTO(camera_id=c.camera_id, target_phase="RED", green_duration=0.0) for c in batch.cameras]
         
-        # ШАГ 3: Решение о фазе (ИСПОЛЬЗУЕМ ПЕРЕКРЁСТКО-СПЕЦИФИЧНОЕ СОСТОЯНИЕ)
-        if inter_id not in self._intersection_phase_states:
-            self._intersection_phase_states[inter_id] = {
-                "active_phase": None,
-                "phase_start_time": 0,
-                "min_duration": 8.0,
-                "max_duration": 30.0,
-            }
-            
-        phase_state = self._intersection_phase_states[inter_id]
-        active_phase = phase_state.get("active_phase")
-        phase_start_time = phase_state.get("phase_start_time", 0)
-        elapsed = time.time() - phase_start_time if active_phase else 999
+        # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
+        phase_state = self.phase_manager.get_or_create(inter_id)
+        active_phase = phase_state.active_phase
+        elapsed = phase_state.elapsed
         
         # Проверяем, есть ли команда зелёной волны для этого перекрёстка
         green_wave_override = None
@@ -138,32 +137,20 @@ class TrafficOrchestrator:
             if data["intersection_id"] != inter_id:
                 continue
             lane_phase = traffic_network.get_phase_for_approach(inter_id, data["approach"])
-            # print(f"  🔎 [{inter_id}] {lane_id} (approach {data['approach']}) → фаза {lane_phase}, машин: {data['car_count']}")
             if lane_phase in phase_cars:
                 phase_cars[lane_phase] += data["car_count"]
-        
-        # print(f"  📊 [{inter_id}] Машины по фазам: {phase_cars}")
-        # print(f"  🔍 [{inter_id}] Lane pool: {[(k, v['approach'], v['car_count']) for k,v in traffic_network.lane_pool.items() if v['intersection_id'] == inter_id]}")
         
         # Применяем зелёную волну если есть команда
         if green_wave_override:
             gw_phase = green_wave_override.get("phase")
-            gw_offset = green_wave_override.get("offset", 0.0)
             
-            # Проверяем, поддерживается ли эта фаза на перекрёстке
             if gw_phase in phase_names:
-                # Рассчитываем, должна ли сейчас гореть зелёная волна
-                # Используем offset как сдвиг времени начала цикла
-                cycle_time = 60.0  # Полный цикл светофора (примерно)
-                normalized_time = (time.time() + gw_offset) % cycle_time
-                
-                # Зелёная волна активна в определённом окне времени
-                # Простое правило: если offset < 15 секунд, то эта фаза должна быть активна
-                if gw_offset < 15.0:
-                    active_phase = gw_phase
-                    phase_state["active_phase"] = active_phase
-                    phase_state["phase_start_time"] = time.time()
-                print(f"  🟢 [{inter_id}] GREEN WAVE: фаза {active_phase} (offset {gw_offset:.1f}с)")
+                # Зелёная волна уже отфильтрована в calculate_green_wave() по времени
+                # Если команда пришла — значит сейчас окно зелёной волны
+                active_phase = gw_phase
+                self.phase_manager.switch_phase(inter_id, active_phase)
+                phase_state = self.phase_manager.get_or_create(inter_id)
+                elapsed = phase_state.elapsed
         
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)
@@ -173,42 +160,38 @@ class TrafficOrchestrator:
                     if phase_cars.get(pn, 0) > 0:
                         active_phase = pn
                         break
-                phase_state["active_phase"] = active_phase
-                phase_state["phase_start_time"] = time.time()
-                # print(f"  🚦 [{inter_id}] Начальная фаза: {active_phase} {phase_cars}")
+                self.phase_manager.switch_phase(inter_id, active_phase)
+                phase_state = self.phase_manager.get_or_create(inter_id)
+                elapsed = phase_state.elapsed
         else:
-            # Режим одного направления: только одна фаза, просто держим её зелёной
+            # Режим одного направления: только одна фаза
             if len(phase_names) == 1:
-                # Одна фаза - всегда зелёная, просто сбрасываем таймер если нужно
-                if elapsed >= phase_state.get("max_duration", 30.0):
-                    # print(f"  🔄 [{inter_id}] Перезапуск фазы {active_phase} (лимит {elapsed:.0f}с)")
-                    phase_state["phase_start_time"] = time.time()
+                if elapsed >= phase_state.max_duration:
+                    phase_state.phase_start_time = time.time()
             else:
                 # Две фазы - стандартная логика переключения
                 opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
                 this = phase_cars.get(active_phase, 0)
                 other = phase_cars.get(opposite, 0)
                 
-                # print(f"  🔍 [{inter_id}] Текущая: {active_phase} (машин: {this}), Противоположная: {opposite} (машин: {other}), Прошло: {elapsed:.1f}с, Мин: {phase_state['min_duration']}с")
-                
-                # Условие 1: на этой фазе нет машин, на другой есть → переключаем
-                if elapsed >= phase_state["min_duration"] and this == 0 and other > 0:
-                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (на {opposite} есть {other} машин)")
+                # Условие 1: на этой фазе нет машин, на другой есть
+                if elapsed >= phase_state.min_duration and this == 0 and other > 0:
                     active_phase = opposite
-                    phase_state["active_phase"] = opposite
-                    phase_state["phase_start_time"] = time.time()
-                # Условие 2: обе фазы пусты дольше 8с → переключаем
-                elif elapsed >= phase_state["min_duration"] and this == 0 and other == 0:
-                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (обе пусты, прошло {elapsed:.0f}с)")
+                    self.phase_manager.switch_phase(inter_id, opposite)
+                    phase_state = self.phase_manager.get_or_create(inter_id)
+                    elapsed = phase_state.elapsed
+                # Условие 2: обе фазы пусты
+                elif elapsed >= phase_state.min_duration and this == 0 and other == 0:
                     active_phase = opposite
-                    phase_state["active_phase"] = opposite
-                    phase_state["phase_start_time"] = time.time()
-                # Условие 3: фаза горит дольше 30 секунд → принудительно переключаем
-                elif elapsed >= phase_state.get("max_duration", 30.0):
-                    # print(f"  🔄 [{inter_id}] {active_phase}→{opposite} (лимит {elapsed:.0f}с, машин: {this})")
+                    self.phase_manager.switch_phase(inter_id, opposite)
+                    phase_state = self.phase_manager.get_or_create(inter_id)
+                    elapsed = phase_state.elapsed
+                # Условие 3: фаза горит дольше max_duration
+                elif elapsed >= phase_state.max_duration:
                     active_phase = opposite
-                    phase_state["active_phase"] = opposite
-                    phase_state["phase_start_time"] = time.time()
+                    self.phase_manager.switch_phase(inter_id, opposite)
+                    phase_state = self.phase_manager.get_or_create(inter_id)
+                    elapsed = phase_state.elapsed
         
         # ШАГ 4: Длительность зелёного
         total_cars = sum(phase_cars.values())
@@ -225,7 +208,7 @@ class TrafficOrchestrator:
                 active_approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
                 break
         
-        # ШАГ 6: Формируем ответы (БЕЗ вызова handle_telemetry!) и одно UI-сообщение
+        # ШАГ 6: Формируем ответы и одно UI-сообщение
         responses = []
         batch_ui_payloads = []
         for cam in batch.cameras:
@@ -240,7 +223,6 @@ class TrafficOrchestrator:
                 green_duration=dur,
             ))
             
-            # UI — обогащённое сообщение
             ui_lanes = []
             for lane in cam.lanes:
                 lane_state = traffic_network.lane_pool.get(lane.lane_id, {})

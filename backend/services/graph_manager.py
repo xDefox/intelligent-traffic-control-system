@@ -1,4 +1,5 @@
 # backend/services/graph_manager.py
+import asyncio
 import networkx as nx
 from typing import Dict, List, Optional, Tuple
 from backend.core.road_config import ROADS
@@ -69,6 +70,7 @@ class CityTrafficGraph:
     def __init__(self):
         self.graph = nx.DiGraph()
         self.lane_pool: Dict[str, dict] = {}
+        self.lane_pool_lock = asyncio.Lock()  # блокировка для async-доступа
         self.intersection_phases: Dict[str, dict] = {}
         # Кэш upstream/downstream — топология графа статична
         self._upstream_cache: Dict[str, Dict[str, List[str]]] = {}
