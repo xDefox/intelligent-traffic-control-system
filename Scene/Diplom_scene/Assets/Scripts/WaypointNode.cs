@@ -16,7 +16,6 @@ public class WaypointNode : MonoBehaviour
     public bool isIntersection = false;
 
     [Header("Визуализация")]
-    public Color gizmoColor = Color.cyan;
     public float gizmoSize = 1.0f;
 
     private void OnDrawGizmos()
@@ -25,7 +24,7 @@ public class WaypointNode : MonoBehaviour
             return;
 
         // Рисуем этот waypoint
-        Gizmos.color = isIntersection ? Color.yellow : gizmoColor;
+        Gizmos.color = isIntersection ? Color.yellow : Color.cyan;
         Gizmos.DrawSphere(transform.position, gizmoSize * 0.3f);
 
         // Рисуем связи с соседями
@@ -37,9 +36,20 @@ public class WaypointNode : MonoBehaviour
                 if (neighbour != null)
                 {
                     Gizmos.DrawLine(transform.position, neighbour.transform.position);
-                    // Рисуем стрелку в направлении соседа
+                    // Рисуем стрелку в середине отрезка, указывающую в сторону соседа
                     Vector3 midPoint = (transform.position + neighbour.transform.position) * 0.5f;
-                    Gizmos.DrawSphere(midPoint, gizmoSize * 0.15f);
+                    Vector3 direction = (neighbour.transform.position - transform.position).normalized;
+                    float arrowLength = gizmoSize * 0.3f;
+                    float arrowAngle = 30f;
+
+                    // Основная линия стрелки
+                    Gizmos.DrawRay(midPoint, direction * arrowLength);
+
+                    // Усики стрелки (два отрезка под углом назад)
+                    Vector3 right = Quaternion.LookRotation(direction) * Quaternion.Euler(0, 180 - arrowAngle, 0) * Vector3.forward;
+                    Vector3 left = Quaternion.LookRotation(direction) * Quaternion.Euler(0, 180 + arrowAngle, 0) * Vector3.forward;
+                    Gizmos.DrawRay(midPoint + direction * arrowLength, right * arrowLength * 0.5f);
+                    Gizmos.DrawRay(midPoint + direction * arrowLength, left * arrowLength * 0.5f);
                 }
             }
         }

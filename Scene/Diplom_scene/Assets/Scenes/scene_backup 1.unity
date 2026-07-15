@@ -2826,7 +2826,7 @@ MonoBehaviour:
   spawnRoutes:
   - name: 0-Z
     spawnPoint: {fileID: 2044697138}
-    startWaypoint: {fileID: 0}
+    startWaypoint: {fileID: 3417601578227586619}
   - name: 3X
     spawnPoint: {fileID: 1069435863}
     startWaypoint: {fileID: 0}
@@ -2835,7 +2835,7 @@ MonoBehaviour:
     startWaypoint: {fileID: 0}
   spawnInterval: 1
   maxActiveCars: 50
-  showRoadGizmos: 0
+  showRoadGizmos: 1
 --- !u!4 &787922381
 Transform:
   m_ObjectHideFlags: 0
@@ -6511,7 +6511,7 @@ Transform:
   m_GameObject: {fileID: 3633999380118542463}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.26099992, y: 0, z: -0.37599945}
+  m_LocalPosition: {x: 0.26099992, y: 0, z: -0.491}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -6579,22 +6579,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!1 &138635256440150651
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 8765115485625251784}
-  m_Layer: 0
-  m_Name: WP_Middle
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
 --- !u!114 &206155358263183425
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6607,14 +6591,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1339146030405700610}
-  - {fileID: 4186900145855271115}
-  - {fileID: 6555641332761619706}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &206155358727253692
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6627,15 +6603,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1339146030194486015}
-  - {fileID: 4186900145374574134}
-  - {fileID: 6555641332704397831}
-  nextPossibleSegments:
-  - {fileID: 3311868873060185437}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &206155359042773399
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6648,15 +6615,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1339146029608429012}
-  - {fileID: 4186900146097207581}
-  - {fileID: 6555641333053408556}
-  nextPossibleSegments:
-  - {fileID: 3311868872545357691}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!1 &282003053849984330
 GameObject:
   m_ObjectHideFlags: 0
@@ -6698,6 +6656,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8931857119093007134}
+  - component: {fileID: 8931857119093007135}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -6719,7 +6678,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8931857119093007134}
-  - {fileID: 8765115485625251784}
   - {fileID: 1188537408960835616}
   m_Father: {fileID: 7783362100120215306}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -7211,6 +7169,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7237151991403887487}
+  - component: {fileID: 7237151991403887488}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -7243,6 +7202,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7237151990854767376}
+  - component: {fileID: 7237151990854767377}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -7485,6 +7445,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2106376611573360781}
+  - component: {fileID: 2106376611573360782}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -7650,6 +7611,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1188537408960835616}
+  - component: {fileID: 1188537408960835617}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -7752,6 +7714,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3387847215893670072}
+  - component: {fileID: 3387847215893670073}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -7805,6 +7768,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 314095939546591280}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1188537408960835617
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1107902493510434510}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &1188537409037833949
 Transform:
   m_ObjectHideFlags: 0
@@ -7820,25 +7798,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 314095939893073613}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1190744579185042439
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 8854175220792551569}
-  - component: {fileID: 5569559019501244670}
-  - component: {fileID: 6437317089973050357}
-  - component: {fileID: 2499408309471502065}
-  m_Layer: 0
-  m_Name: Cube
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
 --- !u!1 &1235531410352195282
 GameObject:
   m_ObjectHideFlags: 0
@@ -7864,6 +7823,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1905268593806820576}
+  - component: {fileID: 1905268593806820577}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -8396,6 +8356,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6364686702679813967}
+  - component: {fileID: 6364686702679813968}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -8444,6 +8405,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6364686702122534688}
+  - component: {fileID: 6364686702122534689}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -8611,22 +8573,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!1 &1659680981325410977
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3417601579311764509}
-  m_Layer: 0
-  m_Name: WP_Start
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
 --- !u!1 &1659680981442342135
 GameObject:
   m_ObjectHideFlags: 0
@@ -8675,22 +8621,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!1 &1659680981884655849
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3417601577712270933}
-  m_Layer: 0
-  m_Name: WP_Start
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
 --- !u!1 &1659680982109175758
 GameObject:
   m_ObjectHideFlags: 0
@@ -8716,6 +8646,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3417601578227586618}
+  - component: {fileID: 3417601578227586619}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -8735,15 +8666,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 448956079864424170}
-  - {fileID: 5035485720636774789}
-  - {fileID: 7897328111885613156}
-  nextPossibleSegments:
-  - {fileID: 2086414248646706674}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1666611527450765508
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8756,15 +8678,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 448956080217696705}
-  - {fileID: 5035485720318957230}
-  - {fileID: 7897328111129687887}
-  nextPossibleSegments:
-  - {fileID: 2086414247897537200}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1666611527663160889
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8777,14 +8690,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 448956080694333244}
-  - {fileID: 5035485719854903379}
-  - {fileID: 7897328111593607602}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &1687075181165156199
 Transform:
   m_ObjectHideFlags: 0
@@ -8842,15 +8747,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6388311586774442069}
-  - {fileID: 955189695614114418}
-  - {fileID: 7114461917056676020}
-  nextPossibleSegments:
-  - {fileID: 3311868873194344047}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1689526982956383240
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8863,15 +8759,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6388311587067283843}
-  - {fileID: 955189695370425252}
-  - {fileID: 7114461916812974434}
-  nextPossibleSegments:
-  - {fileID: 2086414247562463189}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1689526983150820085
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8884,15 +8771,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6388311587123457918}
-  - {fileID: 955189695158146393}
-  - {fileID: 7114461916600713119}
-  nextPossibleSegments:
-  - {fileID: 2086414248055270811}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &1733595813158135711
 Transform:
   m_ObjectHideFlags: 0
@@ -8959,14 +8837,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2106376612405494107}
-  - {fileID: 3180765293105733848}
-  - {fileID: 613275425402628504}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1832304608556603185
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8979,15 +8849,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2106376612054060656}
-  - {fileID: 3180765293824176115}
-  - {fileID: 613275425890313907}
-  nextPossibleSegments:
-  - {fileID: 3311868873060185437}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &1832304609037316556
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9000,15 +8861,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2106376611573360781}
-  - {fileID: 3180765293902219534}
-  - {fileID: 613275426214772814}
-  nextPossibleSegments:
-  - {fileID: 3311868873411973177}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!1 &1835185411356551422
 GameObject:
   m_ObjectHideFlags: 0
@@ -9089,6 +8941,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6196826141096487596}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1905268593806820577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1235531410677719087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4348449590848894378}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &1905268594136670749
 Transform:
   m_ObjectHideFlags: 0
@@ -9291,13 +9159,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151991230280759}
-  - {fileID: 6364686702413930503}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414247038627770
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9310,13 +9171,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990854767376}
-  - {fileID: 6364686702122534688}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414247138583379
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9329,16 +9183,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990955352057}
-  - {fileID: 6364686702155779017}
-  nextPossibleSegments:
-  - {fileID: 1666611526866610159}
-  - {fileID: 2154669299280891246}
-  - {fileID: 3194796140511697643}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414247562463189
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9351,13 +9195,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151991403887487}
-  - {fileID: 6364686702679813967}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414247897537200
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9370,16 +9207,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990132434458}
-  - {fileID: 6364686703547429418}
-  nextPossibleSegments:
-  - {fileID: 2992234012971927572}
-  - {fileID: 6366822427724625500}
-  - {fileID: 1689526982663394782}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414248055270811
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9392,13 +9219,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990256505137}
-  - {fileID: 6364686703655011585}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414248496242838
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9411,16 +9231,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990689258556}
-  - {fileID: 6364686704028747788}
-  nextPossibleSegments:
-  - {fileID: 2992234012522186559}
-  - {fileID: 6366822427409168759}
-  - {fileID: 1689526983150820085}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414248646706674
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9433,15 +9243,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990336420184}
-  - {fileID: 6364686703743020392}
-  nextPossibleSegments:
-  - {fileID: 6366822427466375050}
-  - {fileID: 1689526982956383240}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2086414248898878372
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9454,13 +9255,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7237151990555059982}
-  - {fileID: 6364686703894590270}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &2106376611573360781
 Transform:
   m_ObjectHideFlags: 0
@@ -9470,12 +9264,28 @@ Transform:
   m_GameObject: {fileID: 804628726116968063}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.26099992, y: 0, z: -0.37599945}
+  m_LocalPosition: {x: 0.26099992, y: 0, z: -0.499}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1118163968470721097}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2106376611573360782
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 804628726116968063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4810506255256055524}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &2106376612054060656
 Transform:
   m_ObjectHideFlags: 0
@@ -9518,15 +9328,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1896532037463290495}
-  - {fileID: 3008610214802354993}
-  - {fileID: 1687075181165156199}
-  nextPossibleSegments:
-  - {fileID: 3311868872545357691}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2154669299573744824
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9539,15 +9340,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1896532036684749737}
-  - {fileID: 3008610215080516327}
-  - {fileID: 1687075181440384689}
-  nextPossibleSegments:
-  - {fileID: 3311868873411973177}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2154669300036747845
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9560,15 +9352,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 1896532036740922708}
-  - {fileID: 3008610215556119578}
-  - {fileID: 1687075181916887116}
-  nextPossibleSegments:
-  - {fileID: 3311868873060185437}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!1 &2232729392458265904
 GameObject:
   m_ObjectHideFlags: 0
@@ -9601,14 +9384,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7379985387661999725}
-  - {fileID: 7727458407147811983}
-  - {fileID: 8085389672103810941}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2385987941213480886
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9621,15 +9396,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7379985387466496144}
-  - {fileID: 7727458406668145266}
-  - {fileID: 8085389672180953472}
-  nextPossibleSegments:
-  - {fileID: 3311868871445388630}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2385987941699135645
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9642,15 +9408,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 7379985386848720827}
-  - {fileID: 7727458406352362841}
-  - {fileID: 8085389672932949675}
-  nextPossibleSegments:
-  - {fileID: 3311868871719270040}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!1 &2434701672834637967
 GameObject:
   m_ObjectHideFlags: 0
@@ -9699,27 +9456,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!65 &2499408309471502065
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1190744579185042439}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &2507373312630114432
 GameObject:
   m_ObjectHideFlags: 0
@@ -9886,6 +9622,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6014516699138222611}
+  - component: {fileID: 6014516699138222612}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -9958,6 +9695,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1896532036684749737}
+  - component: {fileID: 2610020057461373515}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -9965,6 +9703,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &2610020057461373515
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2610020057461373514}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 8287199644756594499}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &2610020057518447799
 GameObject:
   m_ObjectHideFlags: 0
@@ -10076,8 +9830,8 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 137525118234552021}
-  - {fileID: 2961165455924987226}
   - {fileID: 6645594780467942431}
+  - {fileID: 2961165455924987226}
   m_Father: {fileID: 7937904265340554759}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &2813226660135344645
@@ -10839,15 +10593,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 8931857119093007134}
-  - {fileID: 8765115485625251784}
-  - {fileID: 1188537408960835616}
-  nextPossibleSegments:
-  - {fileID: 0}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2992234012522186559
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10860,15 +10605,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 8931857119036835299}
-  - {fileID: 8765115485413888309}
-  - {fileID: 1188537409037833949}
-  nextPossibleSegments:
-  - {fileID: 2086414247897537200}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &2992234012971927572
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10881,15 +10617,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 8931857119386176200}
-  - {fileID: 8765115484794019358}
-  - {fileID: 1188537408682203638}
-  nextPossibleSegments:
-  - {fileID: 2086414248646706674}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &3008610214802354993
 Transform:
   m_ObjectHideFlags: 0
@@ -11115,6 +10842,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4268901514252830635}
+  - component: {fileID: 4268901514252830636}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -11193,7 +10921,7 @@ Transform:
   m_GameObject: {fileID: 4810506255256055523}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.266, y: 0, z: -0.227}
+  m_LocalPosition: {x: 0.318, y: 0, z: -0.297}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -11211,15 +10939,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3387847215893670072}
-  - {fileID: 742111024625289595}
-  - {fileID: 4268901514252830635}
-  nextPossibleSegments:
-  - {fileID: 0}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3194796139787294144
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11232,15 +10951,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3387847216353398341}
-  - {fileID: 742111024950816646}
-  - {fileID: 4268901514728431958}
-  nextPossibleSegments:
-  - {fileID: 2086414248055270811}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3194796140511697643
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11253,15 +10963,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3387847215635022190}
-  - {fileID: 742111025438564525}
-  - {fileID: 4268901515083738749}
-  nextPossibleSegments:
-  - {fileID: 3311868873194344047}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868871445388630
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11274,13 +10975,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601577353533810}
-  - {fileID: 4348449591157314190}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868871719270040
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11293,13 +10987,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601577611293372}
-  - {fileID: 4348449590881745216}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868871820933745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11312,15 +10999,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601577712270933}
-  - {fileID: 4348449590848894377}
-  nextPossibleSegments:
-  - {fileID: 2154669299573744824}
-  - {fileID: 3194796139713311549}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868872344474142
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11333,15 +11011,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601578227586618}
-  - {fileID: 4348449590332546502}
-  nextPossibleSegments:
-  - {fileID: 4900777128016114651}
-  - {fileID: 1832304609037316556}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868872418113616
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11354,13 +11023,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601578594630772}
-  - {fileID: 4348449592398149512}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868872545357691
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11373,16 +11035,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601578434595679}
-  - {fileID: 4348449592271929507}
-  nextPossibleSegments:
-  - {fileID: 2385987941213480886}
-  - {fileID: 206155358727253692}
-  - {fileID: 6630413690432327159}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868873060185437
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11395,13 +11047,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601578959974777}
-  - {fileID: 4348449591698274949}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868873194344047
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11414,13 +11059,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601579362667083}
-  - {fileID: 4348449591564091831}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &3311868873411973177
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11433,16 +11071,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 3417601579311764509}
-  - {fileID: 4348449591412531169}
-  nextPossibleSegments:
-  - {fileID: 2385987941699135645}
-  - {fileID: 206155359042773399}
-  - {fileID: 6630413689711854300}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &3387847215635022190
 Transform:
   m_ObjectHideFlags: 0
@@ -11473,6 +11101,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 9158057051414187281}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3387847215893670073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1174851416208990039}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4793628312116245061}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &3387847216353398341
 Transform:
   m_ObjectHideFlags: 0
@@ -11518,21 +11162,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4055754721024541629}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!4 &3417601577712270933
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1659680981884655849}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8.89, y: 0, z: -0.57}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4055754721058049876}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &3417601578227586618
 Transform:
   m_ObjectHideFlags: 0
@@ -11548,6 +11177,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4055754720534079291}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3417601578227586619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1659680982409654406}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 7651296564365881894}
+  - {fileID: 2106376611573360782}
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &3417601578434595679
 Transform:
   m_ObjectHideFlags: 0
@@ -11592,21 +11238,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4055754721282277496}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!4 &3417601579311764509
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1659680981325410977}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8.89, y: 0, z: -0.57}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4055754721601578268}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &3417601579362667083
 Transform:
@@ -11952,6 +11583,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 137525118234552021}
+  - component: {fileID: 3633999380118542464}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -11959,6 +11591,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &3633999380118542464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3633999380118542463}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 6942030765567050973}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!65 &3747386155096152590
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -12253,6 +11901,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4348449590848894377}
+  - component: {fileID: 4348449590848894378}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -12285,22 +11934,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4348449591157314190}
-  m_Layer: 0
-  m_Name: WP_End
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!1 &3833937572231429092
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4348449590332546502}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -12365,6 +11998,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4348449591412531169}
+  - component: {fileID: 4348449591412531170}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -12549,7 +12183,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3417601578227586618}
-  - {fileID: 4348449590332546502}
   m_Father: {fileID: 7269764734143720162}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &4055754720749627507
@@ -12599,7 +12232,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 3417601577712270933}
   - {fileID: 4348449590848894377}
   m_Father: {fileID: 7269764734659265165}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -12633,7 +12265,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 3417601579311764509}
   - {fileID: 4348449591412531169}
   m_Father: {fileID: 7269764733080479941}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -12928,6 +12559,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 9158057051414187281}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4268901514252830636
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3063691122612259447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 7237151991403887488}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &4268901514728431958
 Transform:
   m_ObjectHideFlags: 0
@@ -13018,21 +12665,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &4348449590332546502
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3833937572231429092}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -11.08, y: 0, z: -0.57}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4055754720534079291}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &4348449590848894377
 Transform:
   m_ObjectHideFlags: 0
@@ -13048,6 +12680,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4055754721058049876}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4348449590848894378
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3833937571674313611}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &4348449590881745216
 Transform:
   m_ObjectHideFlags: 0
@@ -13093,6 +12740,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4055754721601578268}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4348449591412531170
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3833937573294668227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &4348449591564091831
 Transform:
   m_ObjectHideFlags: 0
@@ -13218,7 +12880,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6389021884402345010}
-  - {fileID: 8854175220792551569}
   - {fileID: 1581568069}
   - {fileID: 1100478242}
   - {fileID: 1050064248}
@@ -13234,8 +12895,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 31171222495272685}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.39999998, y: -0.120000005, z: -0.47}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -13251,7 +12912,7 @@ Transform:
   m_GameObject: {fileID: 31171223326046011}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.24399948, y: -0.093, z: 0.023000002}
+  m_LocalPosition: {x: -0.7296505, y: 0, z: 0.5047426}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -13283,6 +12944,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 613275426214772814}
+  - component: {fileID: 4462488691570370388}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -13290,6 +12952,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &4462488691570370388
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4462488691570370387}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4348449591412531170}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &4462488691828608645
 GameObject:
   m_ObjectHideFlags: 0
@@ -13573,6 +13251,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5035485719854903379}
+  - component: {fileID: 5035485719854903380}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -13688,6 +13367,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 742111024625289595}
+  - component: {fileID: 4793628312116245061}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -13695,6 +13375,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &4793628312116245061
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4793628312116245060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4268901514252830636}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &4793628312392571794
 GameObject:
   m_ObjectHideFlags: 0
@@ -13752,6 +13448,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3180765293902219534}
+  - component: {fileID: 4810506255256055524}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -13759,6 +13456,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &4810506255256055524
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4810506255256055523}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4462488691570370388}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!114 &4900777127540643110
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13771,15 +13484,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6865412602648774191}
-  - {fileID: 8526859806222778477}
-  - {fileID: 1905268594136670749}
-  nextPossibleSegments:
-  - {fileID: 3311868871445388630}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &4900777128016114651
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13792,15 +13496,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6865412602323263698}
-  - {fileID: 8526859806565082768}
-  - {fileID: 1905268593806820576}
-  nextPossibleSegments:
-  - {fileID: 2086414247038627770}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &4900777128294472205
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13813,14 +13508,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 6865412602028902660}
-  - {fileID: 8526859806806740806}
-  - {fileID: 1905268594586676534}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &5035485719854903379
 Transform:
   m_ObjectHideFlags: 0
@@ -13830,12 +13517,28 @@ Transform:
   m_GameObject: {fileID: 4778786708714094824}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.293, y: 0, z: 0.285}
+  m_LocalPosition: {x: -0.315, y: 0, z: 0.336}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4581202798933359615}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5035485719854903380
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4778786708714094824}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 7897328111593607603}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &5035485720318957230
 Transform:
   m_ObjectHideFlags: 0
@@ -14304,6 +14007,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 448956080694333244}
+  - component: {fileID: 5448554180348675279}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -14311,6 +14015,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &5448554180348675279
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5448554180348675278}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!1 &5448554180556759603
 GameObject:
   m_ObjectHideFlags: 0
@@ -14394,14 +14113,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!33 &5569559019501244670
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1190744579185042439}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &5570314837754991107
 GameObject:
   m_ObjectHideFlags: 0
@@ -14529,6 +14240,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6545239998052783760}
+  - component: {fileID: 6545239998052783761}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -14644,6 +14356,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7897328111593607602}
+  - component: {fileID: 7897328111593607603}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -14909,7 +14622,7 @@ Transform:
   m_GameObject: {fileID: 4131604775530162344}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.0680923, y: -0.099996954, z: -1.5484343}
+  m_LocalPosition: {x: -1.028011, y: -0.099996954, z: -1.5259428}
   m_LocalScale: {x: 20, y: 0.2, z: 4}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -14954,7 +14667,7 @@ Transform:
   m_GameObject: {fileID: 4131604776157387958}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.9, y: -0.099996954, z: -1.55}
+  m_LocalPosition: {x: -0.89533865, y: -0.099996954, z: -1.55}
   m_LocalScale: {x: 20, y: 0.2, z: 4}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -15005,6 +14718,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 8318450991642814413}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6014516699138222612
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2597739397623615137}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &6014516699382039493
 Transform:
   m_ObjectHideFlags: 0
@@ -15034,7 +14762,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6865412602323263698}
-  - {fileID: 8526859806565082768}
   - {fileID: 1905268593806820576}
   m_Father: {fileID: 7937904265340554759}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -15115,6 +14842,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2961165455924987226}
+  - component: {fileID: 6313894350943812785}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -15122,6 +14850,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &6313894350943812785
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6313894350943812784}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!20 &6329056380758112593
 Camera:
   m_ObjectHideFlags: 0
@@ -15188,6 +14931,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4757055718422791760}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6364686702122534689
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1513253673094121362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 2610020057461373515}
+  - {fileID: 3387847215893670073}
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &6364686702155779017
 Transform:
   m_ObjectHideFlags: 0
@@ -15233,6 +14993,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4757055718939405887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6364686702679813968
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1513253672537026557}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &6364686703547429418
 Transform:
   m_ObjectHideFlags: 0
@@ -15320,15 +15095,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2690620266124462811}
-  - {fileID: 6545239997576147053}
-  - {fileID: 6014516699064225006}
-  nextPossibleSegments:
-  - {fileID: 3311868871445388630}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &6366822427466375050
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15341,15 +15107,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2690620266588531750}
-  - {fileID: 6545239998052783760}
-  - {fileID: 6014516699138222611}
-  nextPossibleSegments:
-  - {fileID: 2086414247038627770}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &6366822427724625500
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15362,15 +15119,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2690620265773286896}
-  - {fileID: 6545239998294589254}
-  - {fileID: 6014516699382039493}
-  nextPossibleSegments:
-  - {fileID: 3311868871719270040}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &6388311586774442069
 Transform:
   m_ObjectHideFlags: 0
@@ -15444,7 +15192,7 @@ Transform:
   m_GameObject: {fileID: 4324702852579688731}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -0.5573425, y: 0.052304223, z: 0.44648612}
   m_LocalScale: {x: 4, y: 0.19999999, z: 4}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -15505,54 +15253,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!23 &6437317089973050357
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1190744579185042439}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &6527563363977812049
 GameObject:
   m_ObjectHideFlags: 0
@@ -15802,12 +15502,27 @@ Transform:
   m_GameObject: {fileID: 5761629962243603538}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.248, y: 0, z: 0.312}
+  m_LocalPosition: {x: 0.304, y: 0, z: 0.349}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8318450991642814413}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6545239998052783761
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5761629962243603538}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &6545239998294589254
 Transform:
   m_ObjectHideFlags: 0
@@ -15880,15 +15595,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2510691293302570169}
-  - {fileID: 7455330623105461280}
-  - {fileID: 8953430153839476797}
-  nextPossibleSegments:
-  - {fileID: 2086414248898878372}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &6630413689972468490
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15901,14 +15607,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2510691293545141615}
-  - {fileID: 7455330622829053430}
-  - {fileID: 8953430153577638379}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &6630413690432327159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15921,15 +15619,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 2510691293886526354}
-  - {fileID: 7455330622756119307}
-  - {fileID: 8953430153521598230}
-  nextPossibleSegments:
-  - {fileID: 2086414248055270811}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!4 &6645594779669298633
 Transform:
   m_ObjectHideFlags: 0
@@ -15969,7 +15658,7 @@ Transform:
   m_GameObject: {fileID: 6942030765567050972}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.245, y: 0, z: 0.259}
+  m_LocalPosition: {x: 0.119, y: 0, z: 0.173}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -16000,6 +15689,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1687075181440384689}
+  - component: {fileID: 6855203506937367573}
   m_Layer: 0
   m_Name: WP_End
   m_TagString: Untagged
@@ -16007,6 +15697,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &6855203506937367573
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6855203506937367572}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 4348449591412531170}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &6855203507283864297
 GameObject:
   m_ObjectHideFlags: 0
@@ -16147,6 +15853,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6645594780467942431}
+  - component: {fileID: 6942030765567050973}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -16154,6 +15861,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &6942030765567050973
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942030765567050972}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 6313894350943812785}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &6942030765775135265
 GameObject:
   m_ObjectHideFlags: 0
@@ -16451,6 +16174,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4757055718422791760}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7237151990854767377
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 505723298808219619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 6364686702122534689}
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!4 &7237151990955352057
 Transform:
   m_ObjectHideFlags: 0
@@ -16496,22 +16235,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4757055718939405887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &7239079647372624589
-GameObject:
+--- !u!114 &7237151991403887488
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 8526859806565082768}
-  m_Layer: 0
-  m_Name: WP_Middle
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_GameObject: {fileID: 505723298291724172}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 6364686702679813968}
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!1 &7239079647849145392
 GameObject:
   m_ObjectHideFlags: 0
@@ -16597,7 +16336,7 @@ Transform:
   m_GameObject: {fileID: 2981570757259176631}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 11.29, y: 0.1, z: -2.01}
+  m_LocalPosition: {x: 10.751118, y: 0.2, z: -1.5419247}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16616,7 +16355,7 @@ Transform:
   m_GameObject: {fileID: 2981570757410747617}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: -0, w: -0.7071068}
-  m_LocalPosition: {x: 22.81, y: 0.09, z: -11.46}
+  m_LocalPosition: {x: 22.318611, y: 0.2, z: -10.959171}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16635,7 +16374,7 @@ Transform:
   m_GameObject: {fileID: 2981570757544906707}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 59.43, y: 0.1, z: -2}
+  m_LocalPosition: {x: 58.807636, y: 0.2, z: -1.5450833}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16654,7 +16393,7 @@ Transform:
   m_GameObject: {fileID: 2981570758145848821}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 35.29, y: 0.1, z: -2.01}
+  m_LocalPosition: {x: 34.818596, y: 0.2, z: -1.5529773}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16673,7 +16412,7 @@ Transform:
   m_GameObject: {fileID: 2981570758253429470}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 50.01979, y: 0.1, z: -13.560293}
+  m_LocalPosition: {x: 49.420937, y: 0.2, z: -13.079261}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16692,7 +16431,7 @@ Transform:
   m_GameObject: {fileID: 2981570758339258512}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 1.9, y: 0.1, z: -13.67}
+  m_LocalPosition: {x: 1.3521168, y: 0.2, z: -13.054891}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16710,8 +16449,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2981570758864240895}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0.7071068, z: -0, w: -0.7071068}
-  m_LocalPosition: {x: -1.24, y: 0.1, z: 12.61}
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 1.3645123, y: 0.2, z: 11.137305}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16720,7 +16459,7 @@ Transform:
   - {fileID: 4055754721058049876}
   - {fileID: 4757055718422791760}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 270, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!4 &7269764734692904548
 Transform:
   m_ObjectHideFlags: 0
@@ -16730,7 +16469,7 @@ Transform:
   m_GameObject: {fileID: 2981570758897355798}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 25.88, y: 0.2, z: 10.46}
+  m_LocalPosition: {x: 25.38226, y: 0.2, z: 10.951213}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16749,7 +16488,7 @@ Transform:
   m_GameObject: {fileID: 2981570759159834584}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 49.91, y: 0.1, z: 10.55}
+  m_LocalPosition: {x: 49.414196, y: 0.2, z: 10.935586}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -17129,6 +16868,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6865412602323263698}
+  - component: {fileID: 7651296564365881894}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -17136,6 +16876,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &7651296564365881894
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7651296564365881893}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 1905268593806820577}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &7651296564658985971
 GameObject:
   m_ObjectHideFlags: 0
@@ -17409,6 +17165,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4581202798933359615}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7897328111593607603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5839237701432502624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &7897328111885613156
 Transform:
   m_ObjectHideFlags: 0
@@ -17645,6 +17416,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3008610215080516327}
+  - component: {fileID: 8287199644756594499}
   m_Layer: 0
   m_Name: WP_Middle
   m_TagString: Untagged
@@ -17652,6 +17424,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &8287199644756594499
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8287199644756594498}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours:
+  - {fileID: 6855203506937367573}
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!1 &8287199645233113535
 GameObject:
   m_ObjectHideFlags: 0
@@ -17836,21 +17624,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6196826141286730833}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!4 &8526859806565082768
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7239079647372624589}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.261, y: 0, z: 0.103}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6196826141096487596}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &8526859806806740806
 Transform:
   m_ObjectHideFlags: 0
@@ -17907,6 +17680,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2690620266588531750}
+  - component: {fileID: 8598301342838766403}
   m_Layer: 0
   m_Name: WP_Start
   m_TagString: Untagged
@@ -17914,6 +17688,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &8598301342838766403
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8598301342838766402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 0
+  gizmoSize: 1
 --- !u!33 &8638412111250264661
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -18016,21 +17805,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 314095939893073613}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!4 &8765115485625251784
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 138635256440150651}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.031, y: 0, z: 0.285}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 314095939546591280}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8777967025891387179
 GameObject:
   m_ObjectHideFlags: 0
@@ -18069,21 +17843,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &8854175220792551569
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1190744579185042439}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.071, z: 0}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4408005647054467093}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &8931857119036835299
 Transform:
   m_ObjectHideFlags: 0
@@ -18114,6 +17873,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 314095939546591280}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8931857119093007135
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282003054681003164}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
+  neighbours: []
+  isIntersection: 1
+  gizmoSize: 1
 --- !u!4 &8931857119386176200
 Transform:
   m_ObjectHideFlags: 0
@@ -18240,14 +18014,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 137525118234552021}
-  - {fileID: 6645594780467942431}
-  - {fileID: 2961165455924987226}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &8980917897010344039
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18260,15 +18026,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 137525118312726568}
-  - {fileID: 6645594780389765858}
-  - {fileID: 2961165455852053415}
-  nextPossibleSegments:
-  - {fileID: 2086414247897537200}
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!114 &8980917897762013004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18281,14 +18038,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98254a40844084f44b25bd10de94b968, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoadSegment
-  laneId: 
-  localWaypoints:
-  - {fileID: 137525119064723203}
-  - {fileID: 6645594779669298633}
-  - {fileID: 2961165456167840908}
-  nextPossibleSegments: []
-  oncomingDetector: {fileID: 0}
-  stopWaypointIndex: -1
 --- !u!1 &9063659935364956500
 GameObject:
   m_ObjectHideFlags: 0

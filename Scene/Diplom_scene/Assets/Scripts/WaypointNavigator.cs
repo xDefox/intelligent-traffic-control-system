@@ -18,6 +18,8 @@ public class WaypointNavigator : MonoBehaviour
     public float turnAngleThreshold = 25f;
     [Tooltip("Радиус SphereCast для детекции машин")]
     public float sphereCastRadius = 0.5f;
+    [Tooltip("Дистанция для переключения на следующий waypoint")]
+    public float waypointReachDistance = 1.0f;
 
     [Header("Аварийное торможение")]
     [Tooltip("Минимальное расстояние до впереди идущей машины")]
@@ -106,11 +108,11 @@ public class WaypointNavigator : MonoBehaviour
         directionToTarget.y = 0;
         float distanceToTarget = directionToTarget.magnitude;
 
-        // Если достигли waypoint - переключаемся на следующий БЕЗ остановки
-        if (distanceToTarget < 0.5f)
+        // Если достигли waypoint - переключаемся на следующий
+        if (distanceToTarget < waypointReachDistance)
         {
             ReachedWaypoint();
-            // Пересчитываем направление к новому waypoint
+            // Сразу пересчитываем направление к новому waypoint
             targetPosition = currentNode.transform.position;
             directionToTarget = targetPosition - transform.position;
             directionToTarget.y = 0;
