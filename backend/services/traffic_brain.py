@@ -54,6 +54,7 @@ class AdaptiveTrafficBrain:
             self._approach: str = ""
             self._phase_name: str = ""
             self._last_green_decision_time: float = 0
+            self._last_max_capacity: int = 5
 
     def process_lane_telemetry(self, update: IntersectionUpdateDTO) -> tuple:
         """
@@ -71,6 +72,7 @@ class AdaptiveTrafficBrain:
                 max_capacity=lane.max_capacity,
             )
             self._last_car_count = lane.car_count
+            self._last_max_capacity = lane.max_capacity
 
         intersection_id = update.intersection_id
         lane_id = update.camera_id

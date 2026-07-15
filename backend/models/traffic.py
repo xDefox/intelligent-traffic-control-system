@@ -16,16 +16,6 @@ class IntersectionUpdateDTO(BaseModel):
     lanes: List[LaneDetectionDTO]
 
 
-class PhaseTimingDTO(BaseModel):
-    """Команда от Cloud к конкретному перекрёстку: какую фазу включить"""
-    intersection_id: str
-    target_phase: str                    # Название фазы из конфига (напр. "NS", "EW", "GREEN", "RED")
-    min_duration_seconds: float = 5.0
-    max_duration_seconds: float = 30.0
-    cascade_action: str = "NONE"         # "NONE" | "REDUCE_GREEN" | "GREEN_WAVE"
-    cascade_source: str = ""
-
-
 class CameraTelemetryDTO(BaseModel):
     """Телеметрия от одной камеры внутри batch-запроса"""
     camera_id: str
