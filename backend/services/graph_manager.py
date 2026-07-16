@@ -92,6 +92,7 @@ class CityTrafficGraph:
         self.graph = nx.DiGraph()
         self.lane_pool: Dict[str, dict] = {}
         self.lane_pool_lock = asyncio.Lock()  # блокировка для async-доступа
+        self.intersection_max_capacity: Dict[str, int] = {}
         self.intersection_phases: Dict[str, dict] = {}
         self.intersection_approaches: Dict[str, Set[int]] = {}
         # Кэш upstream/downstream — топология графа статична (из конфига)
@@ -171,14 +172,20 @@ class CityTrafficGraph:
         pool = self.lane_pool[lane_id]
         pool["car_count"] = car_count
         pool["avg_speed"] = avg_speed
-        # Вместимость = МАКСИМУМ из когда-либо виденных машин на этой дороге.
-        # Никогда не уменьшается: камера увидела 4 -> вместимость 4,
-        # увидела 5 -> 5 (функция max, без спада в меньшую сторону).
-        pool["max_capacity"] = max(pool.get("max_capacity", 0), car_count)
 
-        # congestion_index = car_count / max_capacity (приведено к 0..1)
-        if pool["max_capacity"] > 0:
-            pool["congestion_index"] = min(1.0, car_count / pool["max_capacity"])
+        # ОБЩИЙ бегущий максимум машин ДЛЯ ВСЕГО перекрёстка (один знаменатель
+        # на все камеры/полосы). Никогда не уменьшается (функция max).
+        inter_max = self.intersection_max_capacity.get(inter_id, 0)
+        if car_count > inter_max:
+            inter_max = car_count
+            self.intersection_max_capacity[inter_id] = inter_max
+
+        # Вместимость полосы = ОБЩИЙ максимум перекрёстка (для UI и трекбара).
+        pool["max_capacity"] = inter_max
+
+        # congestion_index = car_count / общий_максимум_перекрёстка (приведено к 0..1)
+        if inter_max > 0:
+            pool["congestion_index"] = min(1.0, car_count / inter_max)
         else:
             pool["congestion_index"] = 0.0
 
