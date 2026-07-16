@@ -34,7 +34,7 @@ class TrafficOrchestrator:
         camera_id = update.camera_id
 
         if camera_id not in self.traffic_brains:
-            self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, is_per_lane=True)
+            self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, self.phase_manager, is_per_lane=True)
 
         brain = self.traffic_brains[camera_id]
 
@@ -46,19 +46,10 @@ class TrafficOrchestrator:
         async with traffic_network.lane_pool_lock:
             target_command, green_duration = brain.process_lane_telemetry(update)
 
-        # Получаем фазу из единого PhaseManager
+        # Получаем фазу из единого PhaseManager (единственный источник истины)
         approach = camera_id.replace(f"{inter_id}_", "")
         lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
-        
-        # Синхронизация: в per-lane режиме фаза хранится в traffic_brain._get_intersection_phase_state,
-        # переносим в PhaseManager для единого доступа
-        from backend.services.traffic_brain import _get_intersection_phase_state
-        brain_phase_state = _get_intersection_phase_state(inter_id)
-        brain_active = brain_phase_state.get("active_phase")
         phase_state = self.phase_manager.get_or_create(inter_id)
-        if brain_active is not None and brain_active != phase_state.active_phase:
-            self.phase_manager.switch_phase(inter_id, brain_active)
-            phase_state = self.phase_manager.get_or_create(inter_id)
         active_phase = phase_state.active_phase or "UNKNOWN"
 
         ui_lanes = []

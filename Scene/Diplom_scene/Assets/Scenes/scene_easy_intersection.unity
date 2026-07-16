@@ -1413,7 +1413,7 @@ Camera:
     m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 7
+  m_TargetDisplay: 4
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
@@ -1440,8 +1440,8 @@ MonoBehaviour:
   targetCanvas: {fileID: 1647482322}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.44, y: -0.1}
-  - {x: 0.69, y: -0.07}
+  - {x: 0.44, y: -0.08}
+  - {x: 0.68, y: -0.04}
   - {x: 0.26, y: 0.77}
   - {x: 0.19, y: 0.75}
   editRoiInGame: 1
@@ -1562,10 +1562,10 @@ MonoBehaviour:
   targetCanvas: {fileID: 1598132764}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.6, y: -0.25}
+  - {x: 0.53, y: -0.07}
   - {x: 0.79, y: -0.06}
-  - {x: 0.38, y: 0.82}
-  - {x: 0.28, y: 0.8}
+  - {x: 0.33, y: 0.82}
+  - {x: 0.27, y: 0.8}
   editRoiInGame: 1
 --- !u!1 &302001183
 GameObject:
@@ -1624,7 +1624,7 @@ Transform:
   m_GameObject: {fileID: 309616277}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 14.98, y: -0.09, z: 21.57}
+  m_LocalPosition: {x: 14.13, y: -0.09, z: 22.94}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4628,7 +4628,7 @@ Transform:
   m_GameObject: {fileID: 1069435862}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.7080475, z: -0, w: 0.7061648}
-  m_LocalPosition: {x: 62.5, y: -0.09, z: 1.37}
+  m_LocalPosition: {x: 62.5, y: -0.09, z: 2.16}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4787,10 +4787,10 @@ MonoBehaviour:
   targetCanvas: {fileID: 1569091330}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.41, y: -0.1}
-  - {x: 0.78, y: -0.18}
-  - {x: 0.12, y: 0.85}
-  - {x: 0.04, y: 0.83}
+  - {x: 0.54, y: -0.4}
+  - {x: 0.68, y: -0.02}
+  - {x: 0.12, y: 0.84}
+  - {x: 0.03, y: 0.83}
   editRoiInGame: 1
 --- !u!114 &1100478245
 MonoBehaviour:
@@ -5401,7 +5401,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 0
   m_CookingOptions: 30
@@ -6460,6 +6460,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1575739844}
+  - component: {fileID: 1575739845}
   m_Layer: 0
   m_Name: Intersection1
   m_TagString: Untagged
@@ -6488,6 +6489,27 @@ Transform:
   - {fileID: 3372879917693756171}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1575739845
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1575739843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0877d43c9ffff04388401af3eaf89ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntersectionRightOfWay
+  detectionRadius: 8
+  rightSideAngleRange: 60
+  minRightCarDistance: 2
+  deadlockTimeout: 3
+  creepDistance: 0.5
+  creepSpeed: 1.5
+  creepPauseInterval: 0.8
+  approachThreshold: 0.3
+  showDebugGizmos: 1
 --- !u!1 &1580957866
 GameObject:
   m_ObjectHideFlags: 0
@@ -6628,10 +6650,10 @@ MonoBehaviour:
   targetCanvas: {fileID: 405093546}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.43, y: -0.1}
-  - {x: 0.73, y: -0.07}
-  - {x: 0.17, y: 0.79}
-  - {x: 0.09, y: 0.76}
+  - {x: 0.43, y: -0.11}
+  - {x: 0.72, y: -0.04}
+  - {x: 0.16, y: 0.8}
+  - {x: 0.08, y: 0.78}
   editRoiInGame: 1
 --- !u!114 &1581568072
 MonoBehaviour:
@@ -8214,7 +8236,7 @@ Transform:
   m_GameObject: {fileID: 2044697137}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -7.65899, y: -0.09, z: -21.52391}
+  m_LocalPosition: {x: -7.57, y: -0.09, z: -21.52391}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -8630,6 +8652,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4408005647054467093}
+  - component: {fileID: 4408005647054467094}
   m_Layer: 0
   m_Name: Intersection_3
   m_TagString: Untagged
@@ -9785,9 +9808,9 @@ MonoBehaviour:
   targetCanvas: {fileID: 1918061643}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.5, y: -0.11}
-  - {x: 0.72, y: -0.03}
-  - {x: 0.36, y: 0.83}
+  - {x: 0.49, y: -0.04}
+  - {x: 0.71, y: -0.01}
+  - {x: 0.37, y: 0.82}
   - {x: 0.3, y: 0.81}
   editRoiInGame: 1
 --- !u!23 &1501522693859661636
@@ -10342,6 +10365,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4184194538531114224}
+  - component: {fileID: 4184194538531114225}
   m_Layer: 0
   m_Name: Intersection2
   m_TagString: Untagged
@@ -11053,7 +11077,6 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2559163313595469911}
   - {fileID: 3751131407059181327}
-  - {fileID: 4037719797822689041}
   isIntersection: 1
   gizmoSize: 1
 --- !u!4 &3314139145008629118
@@ -11890,6 +11913,27 @@ Transform:
   - {fileID: 3657408594287038168}
   m_Father: {fileID: 1803056116}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4184194538531114225
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2547917778420622708}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0877d43c9ffff04388401af3eaf89ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntersectionRightOfWay
+  detectionRadius: 8
+  rightSideAngleRange: 60
+  minRightCarDistance: 2
+  deadlockTimeout: 3
+  creepDistance: 0.5
+  creepSpeed: 1.5
+  creepPauseInterval: 0.8
+  approachThreshold: 0.3
+  showDebugGizmos: 1
 --- !u!1 &4193893152259526733
 GameObject:
   m_ObjectHideFlags: 0
@@ -11994,6 +12038,27 @@ Transform:
   - {fileID: 358247956}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4408005647054467094
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 31171222572283920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0877d43c9ffff04388401af3eaf89ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntersectionRightOfWay
+  detectionRadius: 8
+  rightSideAngleRange: 60
+  minRightCarDistance: 2
+  deadlockTimeout: 3
+  creepDistance: 0.5
+  creepSpeed: 1.5
+  creepPauseInterval: 0.8
+  approachThreshold: 0.3
+  showDebugGizmos: 1
 --- !u!4 &4475916968360935173
 Transform:
   m_ObjectHideFlags: 0
@@ -12934,7 +12999,7 @@ Camera:
     m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 7
+  m_TargetDisplay: 6
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
@@ -13696,7 +13761,7 @@ Camera:
     m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 7
+  m_TargetDisplay: 2
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
@@ -13747,7 +13812,7 @@ Camera:
     m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 7
+  m_TargetDisplay: 3
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
@@ -13863,10 +13928,10 @@ MonoBehaviour:
   targetCanvas: {fileID: 5037065729239263622}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.41, y: -0.1}
-  - {x: 0.79, y: -0.18}
+  - {x: 0.52, y: -0.36}
+  - {x: 0.7, y: -0.06}
   - {x: 0.12, y: 0.85}
-  - {x: 0.04, y: 0.83}
+  - {x: 0.04, y: 0.82}
   editRoiInGame: 1
 --- !u!114 &7741517190140978217
 MonoBehaviour:
@@ -13886,10 +13951,10 @@ MonoBehaviour:
   targetCanvas: {fileID: 5037065729351475153}
   maxVisibleBoxes: 15
   roiPolygon:
-  - {x: 0.43, y: -0.1}
-  - {x: 0.73, y: -0.07}
-  - {x: 0.18, y: 0.77}
-  - {x: 0.1, y: 0.74}
+  - {x: 0.4, y: 0}
+  - {x: 0.72, y: -0.08}
+  - {x: 0.17, y: 0.78}
+  - {x: 0.11, y: 0.74}
   editRoiInGame: 1
 --- !u!4 &7750418451196247915
 Transform:
@@ -14461,15 +14526,15 @@ SceneRoots:
   - {fileID: 787922381}
   - {fileID: 394033672}
   - {fileID: 1439700346}
-  - {fileID: 1575739844}
-  - {fileID: 1803056116}
-  - {fileID: 4408005647054467093}
-  - {fileID: 4959950944655520244}
   - {fileID: 6286894046606719686}
+  - {fileID: 1575739844}
+  - {fileID: 4959950944655520244}
   - {fileID: 1470041626261579059}
+  - {fileID: 1803056116}
   - {fileID: 7269764734144533551}
-  - {fileID: 1150320237}
   - {fileID: 7269764733589405568}
-  - {fileID: 1330718304}
   - {fileID: 7269764734727749995}
+  - {fileID: 4408005647054467093}
+  - {fileID: 1150320237}
+  - {fileID: 1330718304}
   - {fileID: 473479233}

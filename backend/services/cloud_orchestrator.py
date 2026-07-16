@@ -3,7 +3,6 @@ import asyncio
 import json
 from typing import Dict, List
 from backend.services.graph_manager import traffic_network
-from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.green_wave import green_wave_coordinator
 
 
