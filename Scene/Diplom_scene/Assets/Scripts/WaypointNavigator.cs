@@ -1,195 +1,229 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+/// <summary>
+/// Упрощённый навигатор для глобального графа waypoints.
+/// Движется от waypoint к waypoint, на каждом выбирая случайного соседа.
+/// </summary>
 public class WaypointNavigator : MonoBehaviour
 {
     [Header("Настройки движения")]
-    public List<Transform> waypoints = new List<Transform>();
-    public float speed = 5f;
-    public float rotationSpeed = 10f;
+    public float speed = 30f;
+    public float rotationSpeed = 25f;
 
-    [Header("Дистанция и Векторы")]
-    [Tooltip("Дистанция до машины впереди (2.2 — идеальный плотный поджим)")]
+    [Header("Дистанция и детекция")]
+    [Tooltip("Дистанция до машины впереди")]
     public float maxCheckDistance = 2.2f;
     [Tooltip("Угол поворота (в градусах), при котором луч полностью гаснет")]
-    public float turnAngleThreshold = 15f;
+    public float turnAngleThreshold = 25f;
+    [Tooltip("Радиус SphereCast для детекции машин")]
+    public float sphereCastRadius = 0.5f;
+    [Tooltip("Дистанция для переключения на следующий waypoint")]
+    public float waypointReachDistance = 1.0f;
 
-    [Header("Отладка")]
-    [Tooltip("Включить логи отладки")]
-    public bool enableDebugLogs = false;
+    [Header("Аварийное торможение")]
+    [Tooltip("Минимальное расстояние до впереди идущей машины")]
+    public float emergencyBrakeDistance = 1.2f;
+    [Tooltip("Скорость сброса при аварийном торможении")]
+    public float emergencyBrakeStrength = 15f;
+    [Tooltip("Сглаживание изменения скорости (больше = плавнее)")]
+    public float speedSmoothing = 10f;
 
-    private int currentWaypointIndex = 0;
+    [Header("Визуализация")]
+    public Color debugRayColor = Color.red;
+
+    // Текущий waypoint
+    private WaypointNode currentNode;
     private float originalSpeed;
 
     // Светофор
     private bool isStoppedByLight = false;
-    private bool isOnIntersection = false;
-    private string lastStopReason = "Едет";
+    private TrafficLightViewer currentTrafficLight;
 
-    // Встречный поток
-    private OncomingTrafficDetector oncomingDetector;
-    private int stopWaypointIndex = 0;
-    
-    // Текущий сегмент дороги
-    private RoadSegment currentSegment;
+    // Physics
+    private Rigidbody rb;
+    private bool usePhysics = false;
+    private WheelCollider[] wheelColliders;
+
+    // Правило правой руки (помеха справа)
+    private IntersectionRightOfWay currentIntersectionRule;
+    private bool isYieldingAtIntersection = false;
+    private bool isDeadlockCreeping = false;
+    private float deadlockCreepTimer = 0f;
+    private float deadlockPauseTimer = 0f;
+    private bool isInDeadlockPause = false;
+
+    // Стоп-триггер светофора
+    private bool isOnIntersection = false;
 
     void Start()
     {
         originalSpeed = speed;
-    }
 
-    public void SetupRoute(List<Transform> routePoints, OncomingTrafficDetector detector, int stopIndex)
-    {
-        waypoints = new List<Transform>(routePoints);
-        oncomingDetector = detector;
-        stopWaypointIndex = stopIndex;
-        currentWaypointIndex = 0;
-
-        if (waypoints.Count > 0)
+        // Check if car has Rigidbody
+        rb = GetComponent<Rigidbody>();
+        if (rb != null)
         {
-            Vector3 lookTarget = new Vector3(waypoints[0].position.x, transform.position.y, waypoints[0].position.z);
-            transform.LookAt(lookTarget);
+            usePhysics = true;
+            rb.isKinematic = true;
+            rb.useGravity = false;
         }
-    }
-    
-    public void SetupSegment(RoadSegment segment, bool isInitialSpawn = false)
-    {
-        if (segment == null || segment.localWaypoints == null || segment.localWaypoints.Count == 0) return;
 
-        currentSegment = segment;
-        waypoints = new List<Transform>(segment.localWaypoints);
-        oncomingDetector = segment.oncomingDetector;
-        stopWaypointIndex = segment.stopWaypointIndex;
-        currentWaypointIndex = 0;
-
-        if (isInitialSpawn && waypoints.Count > 0 && waypoints[0] != null)
+        // Disable WheelColliders to prevent physics conflicts
+        wheelColliders = GetComponentsInChildren<WheelCollider>();
+        if (wheelColliders != null && wheelColliders.Length > 0)
         {
-            Vector3 lookTarget = new Vector3(waypoints[0].position.x, transform.position.y, waypoints[0].position.z);
-            transform.LookAt(lookTarget);
+            foreach (var wc in wheelColliders)
+            {
+                wc.enabled = false;
+            }
         }
     }
 
     void Update()
     {
-        if (waypoints == null || waypoints.Count == 0 || currentWaypointIndex >= waypoints.Count) return;
+        if (currentNode == null) return;
 
-        string currentReason = "Едет";
-        Transform targetWaypoint = waypoints[currentWaypointIndex];
+        // Движение к текущему waypoint
+        MoveToCurrentNode();
+    }
 
-        // Базовая рабочая дистанция
-        float actualMaxDistance = maxCheckDistance;
+    /// <summary>
+    /// Вызывается из триггер-зоны светофора — остановить машину если красный
+    /// </summary>
+    public void StopForTrafficLight(TrafficLightViewer light)
+    {
+        isStoppedByLight = true;
+        currentTrafficLight = light;
+    }
 
-        // ЕСЛИ МЫ НА ПЕРЕКРЕСТКЕ: укорачиваем луч, чтобы не бить в бока
-        if (isOnIntersection)
+    /// <summary>
+    /// Вызывается из триггер-зоны светофора — машина проехала, можно Resume
+    /// </summary>
+    public void ResumeFromTrafficLight()
+    {
+        isStoppedByLight = false;
+        currentTrafficLight = null;
+    }
+
+    /// <summary>
+    /// Установить начальный waypoint для машины
+    /// </summary>
+    public void SetupNode(WaypointNode startNode)
+    {
+        if (startNode == null) return;
+
+        currentNode = startNode;
+        isStoppedByLight = false;
+        currentTrafficLight = null;
+
+        // Поворачиваемся к первому waypoint
+        if (currentNode != null)
         {
-            actualMaxDistance = 0.5f;
+            Vector3 lookTarget = new Vector3(currentNode.transform.position.x, transform.position.y, currentNode.transform.position.z);
+            transform.LookAt(lookTarget);
         }
+    }
 
-        // Считаем угол до цели
-        Vector3 directionToTarget = (targetWaypoint.position - transform.position).normalized;
+    /// <summary>
+    /// Основное движение - едем с постоянной скоростью, только светофоры и машины впереди
+    /// </summary>
+    private void MoveToCurrentNode()
+    {
+        if (currentNode == null) return;
+
+        Vector3 targetPosition = currentNode.transform.position;
+        Vector3 directionToTarget = targetPosition - transform.position;
         directionToTarget.y = 0;
-        float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
+        float distanceToTarget = directionToTarget.magnitude;
 
-        bool carDetectedInFront = false;
-
-        Vector3 rayStart = transform.position + Vector3.up * 0.4f + transform.forward * 0.6f;
-        Vector3 rayEnd = rayStart + transform.forward * actualMaxDistance;
-
-        // Используем луч для детектирования машин
-        if (angleToTarget < turnAngleThreshold)
+        // Если достигли waypoint - переключаемся на следующий
+        if (distanceToTarget < waypointReachDistance)
         {
-            RaycastHit hit;
-            int layerMask = LayerMask.GetMask("Traffic");
+            ReachedWaypoint();
+            // Сразу пересчитываем направление к новому waypoint
+            targetPosition = currentNode.transform.position;
+            directionToTarget = targetPosition - transform.position;
+            directionToTarget.y = 0;
+        }
 
-            Debug.DrawLine(rayStart, rayEnd, Color.red);
+        // Направление к текущему waypoint
+        Vector3 moveDirection = directionToTarget.normalized;
 
-            if (Physics.Raycast(rayStart, transform.forward, out hit, actualMaxDistance, layerMask))
+        // Проверка на светофор
+        float targetSpeed = CheckTrafficLight();
+
+        // Проверка правила правой руки (помеха справа) на перекрёстках
+        CheckIntersectionRightOfWay(ref targetSpeed);
+
+        // Проверка на машину впереди
+        bool carDetected = CheckCarInFront(out float detectedDistance);
+
+        if (carDetected)
+        {
+            if (detectedDistance < emergencyBrakeDistance)
             {
-                if (hit.collider.gameObject != gameObject)
-                {
-                    carDetectedInFront = true;
-                }
+                // Аварийное торможение
+                targetSpeed = 0f;
             }
+            else
+            {
+                // Плавное замедление
+                float brakeFactor = Mathf.Clamp01((detectedDistance - emergencyBrakeDistance) / (maxCheckDistance - emergencyBrakeDistance));
+                targetSpeed = Mathf.Min(targetSpeed, speed * brakeFactor);
+            }
+        }
+
+        // Плавное изменение скорости
+        if (targetSpeed == 0f)
+        {
+            speed = Mathf.Lerp(speed, 0f, emergencyBrakeStrength * Time.deltaTime);
         }
         else
         {
-            Debug.DrawLine(rayStart, rayStart + transform.forward * 0.5f, Color.green);
+            speed = Mathf.Lerp(speed, targetSpeed, speedSmoothing * Time.deltaTime);
         }
 
-        // Логика торможения
-        if (isStoppedByLight)
-        {
-            speed = 0f;
-            currentReason = "Стоит перед светофором";
-        }
-        else if (carDetectedInFront)
-        {
-            speed = 0f;
-            currentReason = "Держит дистанцию";
-        }
-        else if (oncomingDetector != null && !oncomingDetector.IsClear && currentWaypointIndex == stopWaypointIndex)
-        {
-            float distanceToStop = Vector3.Distance(transform.position, waypoints[stopWaypointIndex].position);
-            if (distanceToStop < 1.5f)
-            {
-                speed = 0f;
-                currentReason = "Пропускает встречку";
-            }
-        }
-        else
-        {
-            speed = originalSpeed;
-        }
+        // Если скорость слишком низкая - не двигаемся
+        //if (speed < 0.05f) return;
 
-        if (currentReason != lastStopReason)
-        {
-            if (enableDebugLogs)
-            {
-                Debug.Log($"[{gameObject.name}] {currentReason}");
-            }
-            lastStopReason = currentReason;
-        }
-
-        if (speed <= 0f) return;
-
-        // Движение
-        Vector3 moveDirection = targetWaypoint.position - transform.position;
-        moveDirection.y = 0;
-
+        // Плавный поворот
         if (moveDirection != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
-        transform.Translate(Vector3.forward * speed * Time.deltaTime);
-
-        if (Vector3.Distance(transform.position, targetWaypoint.position) < 0.6f)
+        // Движение
+        if (usePhysics && rb != null)
         {
-            currentWaypointIndex++;
-
-            // Когда дошли до конца текущего сегмента - мгновенно переключаем
-            if (currentWaypointIndex >= waypoints.Count)
-            {
-                SwitchToNextSegment();
-            }
-        }
-    }
-
-    private void SwitchToNextSegment()
-    {
-        if (currentSegment != null && currentSegment.nextPossibleSegments != null && currentSegment.nextPossibleSegments.Count > 0)
-        {
-            // Случайный выбор следующего направления на развилке
-            int randomIndex = Random.Range(0, currentSegment.nextPossibleSegments.Count);
-            RoadSegment nextSegment = currentSegment.nextPossibleSegments[randomIndex];
-
-            // Просто переключаемся на следующий сегмент без временных точек
-            SetupSegment(nextSegment, false);
+            rb.MovePosition(rb.position + moveDirection * speed * Time.deltaTime);
         }
         else
         {
-            // Если дорожная сеть закончилась
+            transform.Translate(moveDirection * speed * Time.deltaTime, Space.World);
+        }
+    }
+
+    /// <summary>
+    /// Переход к следующему waypoint
+    /// </summary>
+    private void ReachedWaypoint()
+    {
+        // Сбрасываем состояние правила правой руки и кэш
+        ResetIntersectionState();
+        currentIntersectionRule = null;
+
+        // Выбираем случайного соседа
+        WaypointNode nextNode = currentNode.GetRandomNeighbour();
+
+        if (nextNode != null)
+        {
+            currentNode = nextNode;
+        }
+        else
+        {
+            // Нет куда ехать - уничтожаем машину
             Destroy(gameObject);
         }
     }
@@ -198,7 +232,8 @@ public class WaypointNavigator : MonoBehaviour
     {
         if (other.CompareTag("StopTrigger"))
         {
-            isOnIntersection = true;
+            // Пока мы стоим или тремся в триггере стоп-линии — ещё НЕ на перекрёстке
+            isOnIntersection = false;
 
             TrafficLightViewer trafficLight = other.GetComponentInParent<TrafficLightViewer>();
             if (trafficLight != null)
@@ -207,10 +242,12 @@ public class WaypointNavigator : MonoBehaviour
                 if (currentLight == TrafficLightViewer.LightColor.Red || currentLight == TrafficLightViewer.LightColor.Yellow)
                 {
                     isStoppedByLight = true;
+                    currentTrafficLight = trafficLight;
                 }
                 else
                 {
                     isStoppedByLight = false;
+                    currentTrafficLight = null;
                 }
             }
         }
@@ -221,7 +258,207 @@ public class WaypointNavigator : MonoBehaviour
         if (other.CompareTag("StopTrigger"))
         {
             isStoppedByLight = false;
-            isOnIntersection = false;
+            currentTrafficLight = null;
+
+            // Выехали из триггера стоп-линии -> выехали НА перекрёсток!
+            isOnIntersection = true;
         }
+    }
+
+    /// <summary>
+    /// Проверка светофора на текущем waypoint
+    /// </summary>
+    private float CheckTrafficLight()
+    {
+        if (isStoppedByLight && currentTrafficLight != null)
+        {
+            TrafficLightViewer.LightColor currentLight = currentTrafficLight.GetCurrentLight();
+            if (currentLight == TrafficLightViewer.LightColor.Red || currentLight == TrafficLightViewer.LightColor.Yellow)
+            {
+                return 0f; // Стоим на красный
+            }
+            else
+            {
+                isStoppedByLight = false;
+                currentTrafficLight = null;
+            }
+        }
+
+        return originalSpeed;
+    }
+
+    /// <summary>
+    /// Проверка правила правой руки (помеха справа) на перекрёстках.
+    /// Если текущий waypoint — перекрёсток с компонентом IntersectionRightOfWay,
+    /// машина уступает дорогу тем, кто приближается справа.
+    /// </summary>
+    private void CheckIntersectionRightOfWay(ref float targetSpeed)
+    {
+        // Проверяем, есть ли на текущем waypoint компонент правила правой руки
+        if (currentNode == null || !currentNode.isIntersection) return;
+
+        // Ищем компонент IntersectionRightOfWay на currentNode или родителе
+        if (currentIntersectionRule == null)
+        {
+            currentIntersectionRule = currentNode.GetComponent<IntersectionRightOfWay>();
+            // Если нет на самом waypoint, ищем на родительском объекте (перекрёстке)
+            if (currentIntersectionRule == null && currentNode.transform.parent != null)
+            {
+                currentIntersectionRule = currentNode.transform.parent.GetComponentInChildren<IntersectionRightOfWay>();
+            }
+        }
+
+        if (currentIntersectionRule == null) return;
+
+        // Проверяем дистанцию до перекрёстка — правило действует только в радиусе детекции
+        float distanceToIntersection = Vector3.Distance(transform.position, currentIntersectionRule.transform.position);
+        if (distanceToIntersection > currentIntersectionRule.detectionRadius * 1.5f)
+        {
+            // Слишком далеко от перекрёстка — сбрасываем состояние
+            if (isYieldingAtIntersection || isDeadlockCreeping)
+            {
+                ResetIntersectionState();
+            }
+            return;
+        }
+
+        // Проверяем, нужно ли уступать
+        bool isDeadlockActive;
+        bool shouldYield = currentIntersectionRule.CheckRightOfWay(
+            transform.position, transform.forward, gameObject, out isDeadlockActive);
+
+        if (isDeadlockActive)
+        {
+            // Режим дедлока — подкрадываемся
+            HandleDeadlockMode(ref targetSpeed);
+        }
+        else if (shouldYield)
+        {
+            // Уступаем — тормозим
+            isYieldingAtIntersection = true;
+            isDeadlockCreeping = false;
+            isInDeadlockPause = false;
+            targetSpeed = 0f;
+        }
+        else
+        {
+            // Путь свободен — сбрасываем состояние
+            if (isYieldingAtIntersection || isDeadlockCreeping)
+            {
+                ResetIntersectionState();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Обработка режима дедлока — медленное подкрадывание с паузами.
+    /// </summary>
+    private void HandleDeadlockMode(ref float targetSpeed)
+    {
+        isDeadlockCreeping = true;
+        isYieldingAtIntersection = false;
+
+        if (isInDeadlockPause)
+        {
+            // В паузе — стоим
+            deadlockPauseTimer += Time.deltaTime;
+            targetSpeed = 0f;
+
+            if (deadlockPauseTimer >= currentIntersectionRule.creepPauseInterval)
+            {
+                isInDeadlockPause = false;
+                deadlockPauseTimer = 0f;
+            }
+        }
+        else
+        {
+            // Подкрадываемся
+            deadlockCreepTimer += Time.deltaTime;
+            targetSpeed = currentIntersectionRule.GetDeadlockSpeed(gameObject);
+
+            // Проверяем, нужно ли сделать паузу
+            if (currentIntersectionRule.ShouldPauseBetweenCreeps(gameObject))
+            {
+                isInDeadlockPause = true;
+                deadlockPauseTimer = 0f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Сброс состояния правила правой руки.
+    /// </summary>
+    private void ResetIntersectionState()
+    {
+        isYieldingAtIntersection = false;
+        isDeadlockCreeping = false;
+        isInDeadlockPause = false;
+        deadlockCreepTimer = 0f;
+        deadlockPauseTimer = 0f;
+    }
+
+    /// <summary>
+    /// Проверка машины впереди - только для замедления
+    /// </summary>
+    private bool CheckCarInFront(out float distance)
+    {
+        distance = float.MaxValue;
+        Vector3 rayStart = transform.position + Vector3.up * 0.4f + transform.forward * 0.6f;
+
+        // Угол к текущему waypoint
+        Vector3 directionToTarget = (currentNode.transform.position - transform.position).normalized;
+        directionToTarget.y = 0;
+        float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
+
+        // Используем SphereCast только если смотрим примерно вперёд
+        if (angleToTarget < turnAngleThreshold)
+        {
+            RaycastHit hit;
+            int layerMask = LayerMask.GetMask("Traffic");
+
+            Debug.DrawLine(rayStart, rayStart + transform.forward * maxCheckDistance, debugRayColor);
+
+            if (Physics.SphereCast(rayStart, sphereCastRadius, transform.forward, out hit, maxCheckDistance, layerMask))
+            {
+                if (hit.collider.gameObject != gameObject)
+                {
+                    distance = hit.distance;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    void OnDestroy()
+    {
+        if (wheelColliders != null)
+        {
+            foreach (var wc in wheelColliders)
+            {
+                if (wc != null) wc.enabled = true;
+            }
+        }
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+        }
+    }
+
+    /// <summary>
+    /// Визуализация в редакторе
+    /// </summary>
+    void OnDrawGizmos()
+    {
+        if (currentNode == null || !TrafficGenerator.ShowDebugGizmos)
+            return;
+
+        // Линия к текущему waypoint
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(transform.position, currentNode.transform.position);
+        Gizmos.DrawSphere(currentNode.transform.position, 0.5f);
     }
 }

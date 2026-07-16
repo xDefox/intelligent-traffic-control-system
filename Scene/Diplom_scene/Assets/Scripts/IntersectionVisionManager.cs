@@ -70,11 +70,15 @@ public class IntersectionVisionManager : MonoBehaviour
         
         Debug.Log($"[{gameObject.name}] 🚦 IntersectionVisionManager запущен: ID={intersectionId}, Камер X={xAxisCameras.Count}, Z={zAxisCameras.Count}, Всего={xAxisCameras.Count + zAxisCameras.Count}");
         
+        if (xAxisCameras.Count == 0 && zAxisCameras.Count == 0)
+        {
+            Debug.LogError($"[{gameObject.name}] ❌ ОШИБКА: Не назначены камеры! X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Хотя бы один список камер должен быть заполнен!");
+            return; // Не запускаем без камер вообще
+        }
+        
         if (xAxisCameras.Count == 0 || zAxisCameras.Count == 0)
         {
-            Debug.LogError($"[{gameObject.name}] ❌ ОШИБКА: Не все камеры назначены! X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Оба списка должны быть заполнены!");
-            Debug.LogError($"[{gameObject.name}] ❌ Без Z-камер система не будет видеть машин с направления -Z и не будет включать зелёный для NS фазы!");
-            return; // Не запускаем без всех камер
+            Debug.Log($"[{gameObject.name}] ℹ️ Режим одного направления: X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Система будет работать с доступными камерами.");
         }
         
         if (intersectionController == null)

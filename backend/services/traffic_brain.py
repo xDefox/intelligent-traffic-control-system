@@ -2,34 +2,8 @@
 from typing import Dict, Optional
 from backend.models.traffic import IntersectionUpdateDTO
 from backend.services.graph_manager import traffic_network
+from backend.services.phase_manager import PhaseManager
 import time
-
-
-# Глобальный словарь для координации фаз НА ОДНОМ перекрёстке
-_intersection_phase_state: Dict[str, dict] = {}
-
-
-def _get_intersection_phase_state(intersection_id: str) -> dict:
-    """Получить или создать состояние фазы для перекрёстка"""
-    if intersection_id not in _intersection_phase_state:
-        _intersection_phase_state[intersection_id] = {
-            "active_phase": None,
-            "phase_start_time": 0,
-            "min_duration": 8.0,
-        }
-    return _intersection_phase_state[intersection_id]
-
-
-def _has_cars_on_any_approach(intersection_id: str, phase_name: str) -> bool:
-    """Есть ли машины хотя бы на одном подходе данной фазы"""
-    for lane_id, data in traffic_network.lane_pool.items():
-        if data["intersection_id"] != intersection_id:
-            continue
-        lane_approach = data["approach"]
-        lane_phase = traffic_network.get_phase_for_approach(intersection_id, lane_approach)
-        if lane_phase == phase_name and data["car_count"] > 0:
-            return True
-    return False
 
 
 class AdaptiveTrafficBrain:
@@ -38,10 +12,13 @@ class AdaptiveTrafficBrain:
     
     НЕ управляет фазой — фазу переключает оркестратор.
     Только решает: GREEN или RED для ЭТОГО подхода.
+    
+    Использует PhaseManager как единый источник истины о фазах.
     """
 
-    def __init__(self, intersection_id: str, is_per_lane: bool = False):
+    def __init__(self, intersection_id: str, phase_manager: PhaseManager, is_per_lane: bool = False):
         self.intersection_id = intersection_id
+        self.phase_manager = phase_manager
         self.is_per_lane = is_per_lane
         
         if is_per_lane:
@@ -54,6 +31,7 @@ class AdaptiveTrafficBrain:
             self._approach: str = ""
             self._phase_name: str = ""
             self._last_green_decision_time: float = 0
+            self._last_max_capacity: int = 5
 
     def process_lane_telemetry(self, update: IntersectionUpdateDTO) -> tuple:
         """
@@ -61,7 +39,7 @@ class AdaptiveTrafficBrain:
         Фазу НЕ переключает — только проверяет, активна ли его фаза.
         """
         if not self.is_per_lane:
-            return self.process_telemetry(update), 0.0
+            return "RED", 0.0
         
         for lane in update.lanes:
             traffic_network.update_lane_state(
@@ -71,6 +49,7 @@ class AdaptiveTrafficBrain:
                 max_capacity=lane.max_capacity,
             )
             self._last_car_count = lane.car_count
+            self._last_max_capacity = lane.max_capacity
 
         intersection_id = update.intersection_id
         lane_id = update.camera_id
@@ -80,9 +59,9 @@ class AdaptiveTrafficBrain:
         if not self._phase_name:
             return "RED", 0.0
         
-        # Проверяем, активна ли наша фаза
-        phase_state = _get_intersection_phase_state(intersection_id)
-        active_phase = phase_state.get("active_phase")
+        # Проверяем, активна ли наша фаза (через PhaseManager — единый источник истины)
+        phase_state = self.phase_manager.get_or_create(intersection_id)
+        active_phase = phase_state.active_phase
         
         if active_phase != self._phase_name:
             # Наша фаза не активна → красный
@@ -134,12 +113,6 @@ class AdaptiveTrafficBrain:
                 self._last_green_decision_time = time.time()
                 return "GREEN", 8.0
             return "GREEN", 0.0
-
-    def process_telemetry(self, update: IntersectionUpdateDTO) -> str:
-        """Legacy"""
-        for lane in update.lanes:
-            traffic_network.update_lane_state(lane_id=lane.lane_id, car_count=lane.car_count, avg_speed=lane.avg_speed, max_capacity=lane.max_capacity)
-        return "NS"
 
     def apply_cascade_command(self, command: dict):
         action = command.get("action", "")

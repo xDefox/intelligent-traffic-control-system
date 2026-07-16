@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import Dict, List
 from backend.services.graph_manager import traffic_network
-from backend.services.traffic_brain import AdaptiveTrafficBrain
+from backend.services.green_wave import green_wave_coordinator
 
 
 class CloudOrchestrator:
@@ -44,19 +44,41 @@ class CloudOrchestrator:
             await asyncio.sleep(1.0)
 
     async def _cascade_tick(self):
-        """Один тик: проверить граф, разослать команды"""
-        # 1. Получаем каскадные команды от графа
         commands = traffic_network.calculate_cascade()
+        
+        # Добавляем команды зелёной волны
+        green_wave_commands = green_wave_coordinator.calculate_green_wave()
+        commands.extend(green_wave_commands)
+        
         self._last_cascade_commands = commands
 
-        # 2. Шлём состояние в UI
+        # Считаем агрегаты
+        total_cars = sum(d["car_count"] for d in traffic_network.lane_pool.values())
+        inter_summary = {}
+        for lane_id, data in traffic_network.lane_pool.items():
+            iid = data["intersection_id"]
+            if iid not in inter_summary:
+                inter_summary[iid] = {"total_lanes": 0, "total_cars": 0, "avg_congestion": 0.0}
+            inter_summary[iid]["total_lanes"] += 1
+            inter_summary[iid]["total_cars"] += data["car_count"]
+            inter_summary[iid]["avg_congestion"] += data.get("congestion_index", 0)
+
+        for iid in inter_summary:
+            lanes = inter_summary[iid]["total_lanes"]
+            inter_summary[iid]["avg_congestion"] /= max(lanes, 1)
+
         if self.ws_manager:
+            # Подсчитываем активные зелёные волны
+            active_waves = [c for c in commands if c.get("action") == "GREEN_WAVE_SYNC"]
+            green_wave_active = len(active_waves) > 0
+            
             state_payload = {
                 "type": "cloud_state",
+                "total_cars_on_network": total_cars,
+                "intersections_summary": inter_summary,
                 "cascade_commands": commands,
-                "green_wave_active": any(
-                    c["action"] == "GREEN_WAVE" for c in commands
-                ),
+                "green_wave_active": green_wave_active,
+                "green_wave_corridors": [c.get("corridor", []) for c in active_waves],
             }
             await self.ws_manager.broadcast(json.dumps(state_payload))
 
