@@ -13,7 +13,11 @@ NODE_R = 14
 
 
 class TrafficMap:
-    """Граф дорожной сети: точки (перекрёстки) + линии (дороги между ними)."""
+    """Граф дорожной сети: точки (перекрёстки) + линии (дороги между ними).
+
+    Строится ДИНАМИЧЕСКИ из данных телеметрии (traffic_network), без хардкода.
+    Количество дорог у каждого перекрёстка берётся из данных (1-4 камеры).
+    """
 
     def __init__(self):
         self.canvas = cv.Canvas(width=CV_WIDTH, height=CV_HEIGHT)
@@ -23,63 +27,63 @@ class TrafficMap:
         self._links = []
         self._phases = {}
         self._congestion = {}
+        self._road_count = {}
+        self._known_intersections = set()
 
-        self._parse()
+        # Контейнер, который кладётся во вкладку "Граф" (обновляется при пересборке).
+        self.container = ft.Container(alignment=ft.Alignment.CENTER)
         self._build()
+        self.container.content = self.stack
 
-    def _parse(self):
-        from backend.core.road_config import ROADS
+    def _sync_topology(self):
+        """Получить топологию из traffic_network и пересобрать граф при изменениях."""
+        from backend.services.graph_manager import traffic_network
 
-        xs = [cfg.get("position", {}).get("x", 0) for iid, cfg in ROADS.items() if iid != "links"]
-        zs = [cfg.get("position", {}).get("z", 0) for iid, cfg in ROADS.items() if iid != "links"]
-        min_x, max_x = min(xs), max(xs) if xs else (0, 0)
-        min_z, max_z = min(zs), max(zs) if zs else (0, 0)
-        range_x = max_x - min_x if max_x != min_x else 1
-        range_z = max_z - min_z if max_z != min_z else 1
+        topo = traffic_network.get_topology_for_ui()
+        intersections = topo["intersections"]
+        links = topo["links"]
 
+        current_ids = set(intersections.keys())
+        # Пересобираем только если набор перекрёстков изменился (появились новые из данных).
+        if current_ids != self._known_intersections or not self._nodes:
+            self._known_intersections = current_ids
+            self._build_shapes(intersections, links)
+
+    def _build_shapes(self, intersections: dict, links: list):
+        if not intersections:
+            self._nodes = {}
+            self._links = []
+            self.stack = ft.Stack(width=CV_WIDTH, height=CV_HEIGHT, controls=[self.canvas])
+            self.container.content = self.stack
+            return
+
+        xs = [p["position"].get("x", 0) for p in intersections.values()]
+        zs = [p["position"].get("z", 0) for p in intersections.values()]
+        min_x, max_x = min(xs), max(xs)
+        min_z, max_z = min(zs), max(zs)
+        range_x = (max_x - min_x) or 1
+        range_z = (max_z - min_z) or 1
         margin = 80
-        for inter_id, config in ROADS.items():
-            if inter_id == "links":
-                continue
-            pos = config.get("position", {"x": 0, "z": 0})
-            px = margin + (pos["x"] - min_x) / range_x * (CV_WIDTH - 2 * margin)
-            py = margin + (pos["z"] - min_z) / range_z * (CV_HEIGHT - 2 * margin)
+
+        self._nodes = {}
+        for inter_id, info in intersections.items():
+            pos = info["position"]
+            px = margin + (pos.get("x", 0) - min_x) / range_x * (CV_WIDTH - 2 * margin)
+            py = margin + (pos.get("z", 0) - min_z) / range_z * (CV_HEIGHT - 2 * margin)
             self._nodes[inter_id] = (px, py)
+            self._road_count[inter_id] = info.get("num_roads", 0)
 
-        for link_str in ROADS.get("links", []):
-            parts = link_str.split("->")
-            if len(parts) == 2:
-                src_parts = parts[0].strip().split("_")
-                dst_parts = parts[1].strip().split("_")
-                src = "_".join(src_parts[1:3])
-                dst = "_".join(dst_parts[1:3])
-                if src in self._nodes and dst in self._nodes:
-                    x1, y1 = self._nodes[src]
-                    x2, y2 = self._nodes[dst]
-                    self._links.append((src, dst, x1, y1, x2, y2))
+        self._links = []
+        for src, dst in links:
+            if src in self._nodes and dst in self._nodes:
+                x1, y1 = self._nodes[src]
+                x2, y2 = self._nodes[dst]
+                self._links.append((src, dst, x1, y1, x2, y2))
 
-    def _node_color(self, inter_id: str) -> str:
-        c = self._congestion.get(inter_id, 0.0)
-        if c > 0.7:
-            return "#ff4444"
-        elif c > 0.4:
-            return "#ffaa00"
-        return "#44ff44"
-
-    def _road_color(self, src: str, dst: str) -> str:
-        phase_src = self._phases.get(src, "")
-        phase_dst = self._phases.get(dst, "")
-        if phase_src or phase_dst:
-            return "#4CAF50"
-        return "#555555"
-
-    def _build(self):
-        shapes = []
-
-        shapes.append(cv.Circle(
+        shapes = [cv.Circle(
             x=CV_WIDTH // 2, y=CV_HEIGHT // 2, radius=1000,
             paint=ft.Paint(color="#1a1a2e", style=ft.PaintingStyle.FILL),
-        ))
+        )]
 
         for src, dst, x1, y1, x2, y2 in self._links:
             shapes.append(cv.Line(
@@ -104,9 +108,11 @@ class TrafficMap:
         self.canvas.shapes = shapes
 
         label_controls = []
+        self._labels = {}
         for inter_id, (px, py) in self._nodes.items():
+            roads = self._road_count.get(inter_id, 0)
             lbl = ft.Text(
-                inter_id.replace("_", " ").title(),
+                f"{inter_id}\n({roads} дор.)",
                 color="white", size=10, weight=ft.FontWeight.BOLD,
                 text_align=ft.TextAlign.CENTER,
             )
@@ -115,9 +121,9 @@ class TrafficMap:
                 ft.Container(
                     content=lbl,
                     left=px - 50,
-                    top=py - NODE_R - 28,
+                    top=py - NODE_R - 40,
                     width=100,
-                    height=20,
+                    height=34,
                 )
             )
 
@@ -126,8 +132,30 @@ class TrafficMap:
             height=CV_HEIGHT,
             controls=[self.canvas] + label_controls,
         )
+        self.container.content = self.stack
+
+    def _build(self):
+        self._sync_topology()
+
+    def _node_color(self, inter_id: str) -> str:
+        c = self._congestion.get(inter_id, 0.0)
+        if c > 0.7:
+            return "#ff4444"
+        elif c > 0.4:
+            return "#ffaa00"
+        return "#44ff44"
+
+    def _road_color(self, src: str, dst: str) -> str:
+        phase_src = self._phases.get(src, "")
+        phase_dst = self._phases.get(dst, "")
+        if phase_src or phase_dst:
+            return "#4CAF50"
+        return "#555555"
 
     def refresh(self):
+        # Подхватываем новые перекрёстки/дороги, появившиеся в данных.
+        self._sync_topology()
+
         shapes = self.canvas.shapes
         if not shapes:
             return
@@ -234,7 +262,7 @@ class TrafficUIFactory:
                             size=12, color="grey"),
                 ]),
                 ft.Divider(),
-                ft.Container(content=self.map.stack, alignment=ft.Alignment.CENTER),
+                self.map.container,
             ], scroll=ft.ScrollMode.AUTO, expand=True),
         )
 
@@ -277,25 +305,28 @@ class TrafficUIFactory:
         )
 
     def _create_lane_card(self, inter_id: str, lane_id: str):
-        phase_text = ft.Text("Фаза: -", size=12, color="grey")
-        count_text = ft.Text("Машин в очереди: 0", size=14)
-        capacity_text = ft.Text("Вместимость: -", size=12, color="grey")
-        load_bar = ft.ProgressBar(value=0.0, width=150, color="green", bgcolor="#333333")
-        light_indicator = ft.Container(width=20, height=20, border_radius=10, bgcolor="red")
+        """Карточка ОДНОЙ ДОРОГИ: цветной кружок (светофор) + название + шкала загрузки.
+        Каждая дорога — отдельная строка (для X-перекрёстка с 4 камерами будет
+        4 строки, 4 кружка, 4 шкалы)."""
+        phase_text = ft.Text("Фаза: -", size=11, color="grey")
+        count_text = ft.Text("0 маш.", size=13, weight=ft.FontWeight.BOLD)
+        capacity_text = ft.Text("вмест: 0", size=11, color="grey")
+        load_bar = ft.ProgressBar(value=0.0, width=170, color="green", bgcolor="#333333")
+        light_indicator = ft.Container(width=22, height=22, border_radius=11, bgcolor="red")
 
         card = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text(f"🛣️ {lane_id}", size=16, weight=ft.FontWeight.BOLD, expand=True),
-                    phase_text,
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Divider(),
-                ft.Row([ft.Text("Светофор:"), light_indicator], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                count_text,
-                capacity_text,
-                ft.Row([ft.Text("Загрузка:", size=12), load_bar], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ]),
-            bgcolor="surfacevariant", padding=12, border_radius=10, expand=True,
+            content=ft.Row([
+                light_indicator,
+                ft.Column([
+                    ft.Text(f"🛣️ {lane_id}", size=14, weight=ft.FontWeight.BOLD),
+                    ft.Row([count_text, capacity_text, phase_text], spacing=10),
+                ], spacing=3, expand=True),
+                ft.Column([
+                    ft.Text("Загрузка", size=10, color="grey"),
+                    load_bar,
+                ], spacing=3),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=14),
+            bgcolor="surfacevariant", padding=10, border_radius=10, expand=True,
         )
         return card, phase_text, count_text, capacity_text, load_bar, light_indicator
 
@@ -348,15 +379,31 @@ class TrafficUIFactory:
                         self.page.update()
 
                     async for message in websocket:
-                        data = json.loads(message)
                         try:
+                            data = json.loads(message)
                             msg_type = data.get("type", "")
                             if msg_type == "cloud_state":
                                 self._pending_cloud_states.append(data)
-                            else:
+                            elif msg_type == "batch_lane_update":
+                                # Обрабатываем batch-обновление: разворачиваем cameras в отдельные lane_update
+                                for cam_data in data.get("cameras", []):
+                                    lane_update = {
+                                        "type": "lane_update",
+                                        "intersection_id": data.get("intersection_id"),
+                                        "lane_id": cam_data.get("lane_id"),
+                                        "command": cam_data.get("command"),
+                                        "current_phase": cam_data.get("current_phase"),
+                                        "green_duration": cam_data.get("green_duration"),
+                                        "phase_elapsed": cam_data.get("phase_elapsed"),
+                                        "lanes": cam_data.get("lanes", []),
+                                        "green_wave": cam_data.get("green_wave"),
+                                    }
+                                    self._pending_lane_updates.append(lane_update)
+                            elif msg_type == "lane_update":
                                 self._pending_lane_updates.append(data)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            if self.page and self.page.update:
+                                pass  # Игнорируем битые сообщения
 
             except Exception:
                 self.status_text.value = "ПОТЕРЯ СВЯЗИ С UTC БЭКЕНДОМ..."
@@ -419,8 +466,10 @@ class TrafficUIFactory:
 
         cards_to_rebuild = False
         for lane in lanes:
-            lane_id = lane["lane_id"]
-            global_key = f"{inter_id}_{lane_id}"
+            # Нормализуем lane_id: убираем префикс "lane_" для отображения
+            raw_lane_id = lane["lane_id"]
+            display_lane_id = raw_lane_id.replace("lane_", "") if raw_lane_id.startswith("lane_") else raw_lane_id
+            global_key = f"{inter_id}_{raw_lane_id}"  # Для кэша используем полный ID
 
             car_count = lane.get("car_count", 0)
             load_pct = lane.get("load_pct", 0)
@@ -429,7 +478,7 @@ class TrafficUIFactory:
             max_capacity = lane.get("max_capacity", 10)
 
             if global_key not in self.lane_cards:
-                card, phase_ref, count_ref, cap_ref, load_bar, light_ref = self._create_lane_card(inter_id, lane_id)
+                card, phase_ref, count_ref, cap_ref, load_bar, light_ref = self._create_lane_card(inter_id, display_lane_id)
                 self.lane_cards[global_key] = {
                     "inter_id": inter_id,
                     "card": card,
@@ -443,8 +492,8 @@ class TrafficUIFactory:
 
             card_data = self.lane_cards[global_key]
             card_data["phase_text"].value = f"Фаза: {phase_name}"
-            card_data["count_text"].value = f"Машин в очереди: {car_count}"
-            card_data["capacity_text"].value = f"Вместимость: {max_capacity} машин"
+            card_data["count_text"].value = f"{car_count} машин."
+            card_data["capacity_text"].value = f"вместительность: {max_capacity}"
             card_data["load_bar"].value = load_pct / 100.0
             if load_pct > 70:
                 card_data["load_bar"].color = "red"
@@ -455,11 +504,13 @@ class TrafficUIFactory:
             card_data["light"].bgcolor = self._light_to_color(light_cmd)
 
         if cards_to_rebuild:
+            # Каждая дорога — отдельная строка (для 4 камер будет 4 строки,
+            # 4 кружка и 4 шкалы заполненности).
             lanes_layout = self.intersection_lanes_layout[inter_id]
             lanes_layout.controls.clear()
             belonging_cards = [info["card"] for info in self.lane_cards.values() if info["inter_id"] == inter_id]
-            for i in range(0, len(belonging_cards), 2):
-                lanes_layout.controls.append(ft.Row(belonging_cards[i:i + 2], spacing=15))
+            for card in belonging_cards:
+                lanes_layout.controls.append(card)
 
     def on_filter_change(self, e):
         self.filter_dropdown.value = e.control.value

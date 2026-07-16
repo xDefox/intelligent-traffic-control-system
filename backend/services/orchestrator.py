@@ -96,8 +96,10 @@ class TrafficOrchestrator:
         async with traffic_network.lane_pool_lock:
             for cam in batch.cameras:
                 for lane in cam.lanes:
+                    # Нормализуем lane_id: добавляем префикс "lane_" если его нет
+                    lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
                     traffic_network.update_lane_state(
-                        lane_id=lane.lane_id,
+                        lane_id=lane_id,
                         car_count=lane.car_count,
                         avg_speed=lane.avg_speed,
                         max_capacity=lane.max_capacity,
@@ -145,42 +147,26 @@ class TrafficOrchestrator:
         
         if active_phase is None:
             # Выбираем фазу с машинами (или первую, если машин нет)
-            if phase_names:
-                active_phase = phase_names[0]
-                for pn in phase_names:
-                    if phase_cars.get(pn, 0) > 0:
-                        active_phase = pn
-                        break
+            active_phase = self._pick_phase(phase_names, phase_cars)
+            self.phase_manager.switch_phase(inter_id, active_phase)
+            phase_state = self.phase_manager.get_or_create(inter_id)
+            elapsed = phase_state.elapsed
+        else:
+            # ДИНАМИЧЕСКОЕ переключение для ЛЮБОГО числа фаз (1..N дорог)
+            this = phase_cars.get(active_phase, 0)
+
+            if elapsed >= phase_state.max_duration:
+                # Фаза горит слишком долго — переключаемся на лучшую другую
+                active_phase = self._pick_phase(phase_names, phase_cars, exclude=active_phase)
                 self.phase_manager.switch_phase(inter_id, active_phase)
                 phase_state = self.phase_manager.get_or_create(inter_id)
                 elapsed = phase_state.elapsed
-        else:
-            # Режим одного направления: только одна фаза
-            if len(phase_names) == 1:
-                if elapsed >= phase_state.max_duration:
-                    phase_state.phase_start_time = time.time()
-            else:
-                # Две фазы - стандартная логика переключения
-                opposite = phase_names[1] if phase_names[0] == active_phase else phase_names[0]
-                this = phase_cars.get(active_phase, 0)
-                other = phase_cars.get(opposite, 0)
-                
-                # Условие 1: на этой фазе нет машин, на другой есть
-                if elapsed >= phase_state.min_duration and this == 0 and other > 0:
-                    active_phase = opposite
-                    self.phase_manager.switch_phase(inter_id, opposite)
-                    phase_state = self.phase_manager.get_or_create(inter_id)
-                    elapsed = phase_state.elapsed
-                # Условие 2: обе фазы пусты
-                elif elapsed >= phase_state.min_duration and this == 0 and other == 0:
-                    active_phase = opposite
-                    self.phase_manager.switch_phase(inter_id, opposite)
-                    phase_state = self.phase_manager.get_or_create(inter_id)
-                    elapsed = phase_state.elapsed
-                # Условие 3: фаза горит дольше max_duration
-                elif elapsed >= phase_state.max_duration:
-                    active_phase = opposite
-                    self.phase_manager.switch_phase(inter_id, opposite)
+            elif elapsed >= phase_state.min_duration and this == 0:
+                # На активной фазе нет машин — переключаемся, если где-то есть
+                candidate = self._pick_phase(phase_names, phase_cars, exclude=active_phase)
+                if candidate != active_phase and phase_cars.get(candidate, 0) > 0:
+                    active_phase = candidate
+                    self.phase_manager.switch_phase(inter_id, candidate)
                     phase_state = self.phase_manager.get_or_create(inter_id)
                     elapsed = phase_state.elapsed
         
@@ -262,3 +248,22 @@ class TrafficOrchestrator:
             }))
 
         return responses
+
+    @staticmethod
+    def _pick_phase(phase_names: List[str], phase_cars: Dict[str, int],
+                    exclude: str = None) -> str:
+        """
+        Выбрать фазу для переключения.
+
+        Работает для ЛЮБОГО числа фаз (1..N), не только для 2.
+        Берёт фазу с наибольшим числом машин; если машин нет —
+        первую подходящую (кроме exclude).
+        """
+        candidates = [pn for pn in phase_names if pn != exclude]
+        if not candidates:
+            return exclude if exclude in phase_names else (phase_names[0] if phase_names else None)
+
+        best = max(candidates, key=lambda pn: phase_cars.get(pn, 0))
+        if phase_cars.get(best, 0) > 0:
+            return best
+        return candidates[0]
