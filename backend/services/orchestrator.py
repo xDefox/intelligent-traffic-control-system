@@ -202,7 +202,11 @@ class TrafficOrchestrator:
             
             ui_lanes = []
             for lane in cam.lanes:
-                lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
+                # Нормализуем lane_id ТАК ЖЕ, как при update_lane_state (префикс "lane_"),
+                # иначе lookup в lane_pool не совпадает и max_capacity падает в дефолт 10,
+                # из-за чего трекбар считается "на 10 машин".
+                norm_lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
+                lane_state = traffic_network.lane_pool.get(norm_lane_id, {})
                 lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
                 ui_lanes.append({
                     "lane_id": lane.lane_id,
@@ -211,7 +215,8 @@ class TrafficOrchestrator:
                     "load_pct": int(lane_state.get("congestion_index", 0) * 100),
                     "light": cmd,
                     "phase_name": lane_phase or "UNKNOWN",
-                    "max_capacity": lane_state.get("max_capacity", 10),
+                    # max_capacity — бегущий максимум машин (функция max), он же 100% для трекбара
+                    "max_capacity": lane_state.get("max_capacity", 1) or 1,
                 })
 
             phase_elapsed = round(elapsed, 1) if active_phase else 0.0

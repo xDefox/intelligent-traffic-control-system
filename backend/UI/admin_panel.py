@@ -310,6 +310,7 @@ class TrafficUIFactory:
         4 строки, 4 кружка, 4 шкалы)."""
         phase_text = ft.Text("Фаза: -", size=11, color="grey")
         count_text = ft.Text("0 маш.", size=13, weight=ft.FontWeight.BOLD)
+        load_text = ft.Text("0/0", size=10, color="grey")
         load_bar = ft.ProgressBar(value=0.0, width=170, color="green", bgcolor="#333333")
         light_indicator = ft.Container(width=22, height=22, border_radius=11, bgcolor="red")
 
@@ -321,13 +322,13 @@ class TrafficUIFactory:
                     ft.Row([count_text, phase_text], spacing=10),
                 ], spacing=3, expand=True),
                 ft.Column([
-                    ft.Text("Загрузка", size=10, color="grey"),
+                    ft.Row([ft.Text("Загрузка", size=10, color="grey"), load_text], spacing=5),
                     load_bar,
                 ], spacing=3),
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=14),
             bgcolor="surfacevariant", padding=10, border_radius=10, expand=True,
         )
-        return card, phase_text, count_text, load_bar, light_indicator
+        return card, phase_text, count_text, load_text, load_bar, light_indicator
 
     @staticmethod
     def _light_to_color(command: str) -> str:
@@ -496,12 +497,13 @@ class TrafficUIFactory:
             max_capacity = lane.get("max_capacity", 1) or 1
 
             if global_key not in self.lane_cards:
-                card, phase_ref, count_ref, load_bar, light_ref = self._create_lane_card(inter_id, display_lane_id)
+                card, phase_ref, count_ref, load_ref, load_bar, light_ref = self._create_lane_card(inter_id, display_lane_id)
                 self.lane_cards[global_key] = {
                     "inter_id": inter_id,
                     "card": card,
                     "phase_text": phase_ref,
                     "count_text": count_ref,
+                    "load_text": load_ref,
                     "load_bar": load_bar,
                     "light": light_ref,
                 }
@@ -513,6 +515,8 @@ class TrafficUIFactory:
             card_data = self.lane_cards[global_key]
             card_data["phase_text"].value = f"Фаза: {phase_name}"
             card_data["count_text"].value = f"{car_count} маш."
+            # Тот же знаменатель (max_capacity), что и у бара: "3/5"
+            card_data["load_text"].value = f"{car_count}/{max_capacity}"
             card_data["load_bar"].value = load_ratio
             if load_ratio > 0.7:
                 card_data["load_bar"].color = "red"
