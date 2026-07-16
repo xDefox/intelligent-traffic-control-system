@@ -310,7 +310,6 @@ class TrafficUIFactory:
         4 строки, 4 кружка, 4 шкалы)."""
         phase_text = ft.Text("Фаза: -", size=11, color="grey")
         count_text = ft.Text("0 маш.", size=13, weight=ft.FontWeight.BOLD)
-        capacity_text = ft.Text("вмест: 0", size=11, color="grey")
         load_bar = ft.ProgressBar(value=0.0, width=170, color="green", bgcolor="#333333")
         light_indicator = ft.Container(width=22, height=22, border_radius=11, bgcolor="red")
 
@@ -319,7 +318,7 @@ class TrafficUIFactory:
                 light_indicator,
                 ft.Column([
                     ft.Text(f"🛣️ {lane_id}", size=14, weight=ft.FontWeight.BOLD),
-                    ft.Row([count_text, capacity_text, phase_text], spacing=10),
+                    ft.Row([count_text, phase_text], spacing=10),
                 ], spacing=3, expand=True),
                 ft.Column([
                     ft.Text("Загрузка", size=10, color="grey"),
@@ -328,7 +327,7 @@ class TrafficUIFactory:
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=14),
             bgcolor="surfacevariant", padding=10, border_radius=10, expand=True,
         )
-        return card, phase_text, count_text, capacity_text, load_bar, light_indicator
+        return card, phase_text, count_text, load_bar, light_indicator
 
     @staticmethod
     def _light_to_color(command: str) -> str:
@@ -490,32 +489,34 @@ class TrafficUIFactory:
             global_key = f"{inter_id}_{raw_lane_id}"  # Для кэша используем полный ID
 
             car_count = lane.get("car_count", 0)
-            load_pct = lane.get("load_pct", 0)
             light_cmd = lane.get("light", "RED")
             phase_name = lane.get("phase_name", "UNKNOWN")
-            max_capacity = lane.get("max_capacity", 10)
+            # max_capacity — максимум машин, когда-либо увиденный камерой.
+            # Он и есть 100% загрузки (механика: сколько видит камера — то и 100%).
+            max_capacity = lane.get("max_capacity", 1) or 1
 
             if global_key not in self.lane_cards:
-                card, phase_ref, count_ref, cap_ref, load_bar, light_ref = self._create_lane_card(inter_id, display_lane_id)
+                card, phase_ref, count_ref, load_bar, light_ref = self._create_lane_card(inter_id, display_lane_id)
                 self.lane_cards[global_key] = {
                     "inter_id": inter_id,
                     "card": card,
                     "phase_text": phase_ref,
                     "count_text": count_ref,
-                    "capacity_text": cap_ref,
                     "load_bar": load_bar,
                     "light": light_ref,
                 }
                 cards_to_rebuild = True
 
+            # Загрузка = текущие машины / макс. когда-либо увиденные (0..1)
+            load_ratio = min(1.0, car_count / max_capacity)
+
             card_data = self.lane_cards[global_key]
             card_data["phase_text"].value = f"Фаза: {phase_name}"
-            card_data["count_text"].value = f"{car_count} машин."
-            card_data["capacity_text"].value = f"вместительность: {max_capacity}"
-            card_data["load_bar"].value = load_pct / 100.0
-            if load_pct > 70:
+            card_data["count_text"].value = f"{car_count} маш."
+            card_data["load_bar"].value = load_ratio
+            if load_ratio > 0.7:
                 card_data["load_bar"].color = "red"
-            elif load_pct > 40:
+            elif load_ratio > 0.4:
                 card_data["load_bar"].color = "orange"
             else:
                 card_data["load_bar"].color = "green"
