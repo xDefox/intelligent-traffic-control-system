@@ -353,13 +353,31 @@ class TrafficUIFactory:
             changed = True
         self._pending_cloud_states.clear()
 
-        latest_by_inter = {}
+        # Сливаем ВСЕ lane_update одного перекрёстка в ОДИН:
+        # каждая камера несёт свои полосы, поэтому собираем их все,
+        # чтобы в контейнере перекрёстка было столько карточек (показаний + индикаторов),
+        # сколько реально полос (поведение "старой версии").
+        merged_by_inter = {}
         for data in self._pending_lane_updates:
             inter_id = data.get("intersection_id", "unknown")
-            latest_by_inter[inter_id] = data
+            if inter_id not in merged_by_inter:
+                merged_by_inter[inter_id] = {
+                    "type": "lane_update",
+                    "intersection_id": inter_id,
+                    "current_phase": data.get("current_phase", "UNKNOWN"),
+                    "green_wave": data.get("green_wave"),
+                    "lanes": [],
+                }
+            merged_by_inter[inter_id]["lanes"].extend(data.get("lanes", []))
+            # Фаза/зелёная волна — берём актуальные (с последнего сообщения по этому перекрёстку)
+            if data.get("current_phase"):
+                merged_by_inter[inter_id]["current_phase"] = data.get("current_phase")
+            if data.get("green_wave") is not None:
+                merged_by_inter[inter_id]["green_wave"] = data.get("green_wave")
+
         self._pending_lane_updates.clear()
 
-        for data in latest_by_inter.values():
+        for data in merged_by_inter.values():
             self._apply_lane_update(data)
             self.map.update_lane_update(data)
             changed = True
