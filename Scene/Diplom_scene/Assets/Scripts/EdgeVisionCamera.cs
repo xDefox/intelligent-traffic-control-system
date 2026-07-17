@@ -22,10 +22,35 @@ public class EdgeVisionCamera : MonoBehaviour
     {
         public float xCenter, yCenter, width, height;
         public float confidence;
+        public int classId; // Класс YOLO (0=car, 1=bus, 2=...)
     }
 
     private List<BoundingBox> detectedBoxes = new List<BoundingBox>();
     private HashSet<int> vehicleClassIds = new HashSet<int> { 0, 1 }; // 2, 3, 5, 7 для yolo8
+
+    [Header("Детекция спецтранспорта (Physics Overlap)")]
+    [Tooltip("Радиус проверки Physics.OverlapSphere вокруг центра bounding box'а YOLO")]
+    public float emergencyOverlapRadius = 2.5f;
+    [Tooltip("Включить логирование детекции спецтранспорта")]
+    public bool debugLogClassIds = false;
+    
+    /// <summary>
+    /// true если в текущем кадре обнаружен спецтранспорт
+    /// </summary>
+    public bool emergencyDetected { get; private set; } = false;
+    /// <summary>
+    /// Сколько спецтранспорта обнаружено
+    /// </summary>
+    public int emergencyDetectedCount { get; private set; } = 0;
+    
+    /// <summary>
+    /// Сбросить флаг детекции (вызывать перед новым кадром)
+    /// </summary>
+    public void ResetEmergencyDetection()
+    {
+        emergencyDetected = false;
+        emergencyDetectedCount = 0;
+    }
 
     [Header("Зона детекции (ROI) для этой камеры")]
     public Vector2[] roiPolygon = new Vector2[]
@@ -245,19 +270,17 @@ public class EdgeVisionCamera : MonoBehaviour
 
             for (int i = 0; i < numAnchors; i++)
             {
-                // Ранний выход: быстрая проверка confidence
-                float maxScore = cpuOutput[isTransposed ? 0 : 0,
-                                              isTransposed ? i : 4,
-                                              isTransposed ? 4 : i];
+                // Находим лучший classId и его confidence
+                int bestClassId = -1;
+                float maxScore = -1f;
 
-                // Если первый класс не прошёл — проверяем остальные
-                if (maxScore <= confidenceThreshold)
+                foreach (int classId in vehicleClassIds)
                 {
-                    foreach (int classId in vehicleClassIds)
+                    float score = isTransposed ? cpuOutput[0, i, 4 + classId] : cpuOutput[0, 4 + classId, i];
+                    if (score > maxScore)
                     {
-                        if (classId == 0) continue; // уже проверили
-                        float score = isTransposed ? cpuOutput[0, i, 4 + classId] : cpuOutput[0, 4 + classId, i];
-                        if (score > maxScore) maxScore = score;
+                        maxScore = score;
+                        bestClassId = classId;
                     }
                 }
 
@@ -288,15 +311,64 @@ public class EdgeVisionCamera : MonoBehaviour
                 // ROI check — быстрый отсев до создания объекта
                 if (IsPointInPolygon(centerPointNormalizedUnity, roiPolygon))
                 {
-                    candidates.Add(new BoundingBox { xCenter = normX, yCenter = unityY, width = normW, height = normH, confidence = maxScore });
+                    // Логируем classId для отладки
+                    if (debugLogClassIds)
+                    {
+                        Debug.Log($"[EdgeVisionCamera] YOLO classId={bestClassId}, confidence={maxScore:F2}, lane={gameObject.name}");
+                    }
+                    
+                    candidates.Add(new BoundingBox { 
+                        xCenter = normX, yCenter = unityY, width = normW, height = normH, 
+                        confidence = maxScore, classId = bestClassId 
+                    });
                 }
             }
 
             detectedBoxes = ApplyNmsOptimized(candidates, iouThreshold);
         }
 
+        // Детекция спецтранспорта по classId
+        DetectEmergencyVehicles();
+
         UpdateBoxVisuals();
         return detectedBoxes.Count;
+    }
+
+    /// <summary>
+    /// Проверяет детектированные YOLO bounding box'ы на совпадение
+    /// с объектами, у которых WaypointNavigator.emergencyMode == true.
+    /// Использует Physics.OverlapSphere в точке проекции центра bounding box'а.
+    /// </summary>
+    private void DetectEmergencyVehicles()
+    {
+        ResetEmergencyDetection();
+        
+        if (detectedBoxes.Count == 0 || targetCamera == null)
+            return;
+
+        // Для каждого bounding box проверяем overlap
+        foreach (var box in detectedBoxes)
+        {
+            // Преобразуем нормализованные координаты в мировую точку
+            Vector3 viewportPos = new Vector3(box.xCenter, box.yCenter, 0.5f);
+            Vector3 worldPos = targetCamera.ViewportToWorldPoint(viewportPos);
+
+            // Проверяем сферу вокруг центра bounding box'а
+            Collider[] hitColliders = Physics.OverlapSphere(worldPos, emergencyOverlapRadius);
+            foreach (var hit in hitColliders)
+            {
+                WaypointNavigator nav = hit.GetComponent<WaypointNavigator>();
+                if (nav != null && nav.IsEmergencyMode())
+                {
+                    emergencyDetected = true;
+                    emergencyDetectedCount++;
+                    Debug.Log($"[EdgeVisionCamera] 🚨 Спецтранспорт обнаружен! камера={gameObject.name}");
+                    break;
+                }
+            }
+
+            if (emergencyDetected) break;
+        }
     }
 
     /// <summary>

@@ -20,6 +20,14 @@ class CameraTelemetryDTO(BaseModel):
     """Телеметрия от одной камеры внутри batch-запроса"""
     camera_id: str
     lanes: List[LaneDetectionDTO]
+    emergency_vehicle_detected: bool = Field(
+        default=False,
+        description="True если камера детектировала спецтранспорт (полиция, скорая, пожарные)"
+    )
+    emergency_approach: Optional[str] = Field(
+        default=None,
+        description="Подход на котором обнаружен спецтранспорт (например 'approach_0')"
+    )
 
 
 class BatchTelemetryDTO(BaseModel):
@@ -33,9 +41,21 @@ class SingleResponseDTO(BaseModel):
     camera_id: str
     target_phase: str
     green_duration: float = 0.0
+    emergency_override: bool = Field(
+        default=False,
+        description="True если включён режим зелёного коридора для спецтранспорта"
+    )
 
 
 class BatchResponseDTO(BaseModel):
     """Ответ на batch-телеметрию"""
     type: str = "batch_response"
     responses: List[SingleResponseDTO]
+    emergency_corridor_active: bool = Field(
+        default=False,
+        description="Активен ли зелёный коридор на этом перекрёстке"
+    )
+    emergency_corridor_phase: Optional[str] = Field(
+        default=None,
+        description="Фаза зелёного коридора (например 'EW' или 'NS')"
+    )

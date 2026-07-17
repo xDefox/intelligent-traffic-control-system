@@ -39,6 +39,13 @@ public class IntersectionManager : MonoBehaviour
     private float xGreenRemaining = 0f;
     private float zGreenRemaining = 0f;
 
+    [Header("EMERGENCY режим (зелёный коридор)")]
+    [Tooltip("Время мигания зелёного в emergency режиме")]
+    public float emergencyBlinkInterval = 0.3f;
+    private bool emergencyMode = false;
+    private string emergencyPhase = null;
+    private Coroutine emergencyCoroutine = null;
+
     void Start()
     {
         // Явно включаем начальную фазу при старте, чтобы светофоры ожили
@@ -322,6 +329,98 @@ public class IntersectionManager : MonoBehaviour
         SetPhase(finalPhase);
         xIsTransitioning = false;
         zIsTransitioning = false;
+    }
+
+    /// <summary>
+    /// Включить/выключить EMERGENCY режим (зелёный коридор).
+    /// В emergency режиме зелёный мигает на фазе спецтранспорта,
+    /// а противоположная ось горит красным.
+    /// </summary>
+    public void SetEmergencyMode(bool active, string phase = null)
+    {
+        if (active && !emergencyMode)
+        {
+            emergencyMode = true;
+            emergencyPhase = phase;
+            
+            // Останавливаем автономный цикл
+            if (useAutonomousCycle && cycleCoroutine != null)
+            {
+                StopCoroutine(cycleCoroutine);
+                cycleCoroutine = null;
+                useAutonomousCycle = false;
+            }
+            
+            // Останавливаем обычные таймеры
+            if (xGreenCoroutine != null) { StopCoroutine(xGreenCoroutine); xGreenCoroutine = null; }
+            if (zGreenCoroutine != null) { StopCoroutine(zGreenCoroutine); zGreenCoroutine = null; }
+            
+            Debug.Log($"[IntersectionManager] 🚨 EMERGENCY режим ВКЛЮЧЁН! Фаза={phase}");
+            
+            // Запускаем мигание
+            if (emergencyCoroutine != null) StopCoroutine(emergencyCoroutine);
+            emergencyCoroutine = StartCoroutine(EmergencyBlinkRoutine());
+        }
+        else if (!active && emergencyMode)
+        {
+            emergencyMode = false;
+            emergencyPhase = null;
+            
+            if (emergencyCoroutine != null)
+            {
+                StopCoroutine(emergencyCoroutine);
+                emergencyCoroutine = null;
+            }
+            
+            Debug.Log("[IntersectionManager] ✅ EMERGENCY режим ВЫКЛЮЧЕН");
+            
+            // Возвращаем всё на красный
+            SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            xAxisState = AxisState.Red;
+            zAxisState = AxisState.Red;
+        }
+    }
+    
+    /// <summary>
+    /// Мигание зелёного на фазе спецтранспорта.
+    /// </summary>
+    private IEnumerator EmergencyBlinkRoutine()
+    {
+        while (emergencyMode)
+        {
+            // Определяем, какая ось должна гореть зелёным
+            // EW (X-axis) = approach_0,1; NS (Z-axis) = approach_2,3
+            bool isXAxisEmergency = (emergencyPhase == "EW");
+            
+            // Включаем зелёный на emergency оси
+            if (isXAxisEmergency)
+            {
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Green);
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            else
+            {
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Green);
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            
+            yield return new WaitForSeconds(emergencyBlinkInterval);
+            
+            if (!emergencyMode) yield break;
+            
+            // Гасим зелёный (красный на обеих)
+            if (isXAxisEmergency)
+            {
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            else
+            {
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            
+            yield return new WaitForSeconds(emergencyBlinkInterval);
+        }
     }
 
     void SetLightsState(List<TrafficLightViewer> lights, TrafficLightViewer.LightColor color)

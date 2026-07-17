@@ -54,6 +54,8 @@ public class IntersectionVisionManager : MonoBehaviour
     {
         public string camera_id;
         public List<LaneDetectionDTO> lanes;
+        public bool emergency_vehicle_detected;
+        public string emergency_approach;
     }
 
     // Кэш камер для batch inference
@@ -213,6 +215,9 @@ public class IntersectionVisionManager : MonoBehaviour
             string laneId = $"{intersectionId}_approach_{approachIndex}";
             string axisType = i < xAxisCameras.Count ? "X" : "Z";
 
+            // Определяем подход для emergency (approach_0,1 = X; approach_2,3 = Z)
+            string emergencyApproach = $"approach_{approachIndex}";
+            
             CameraTelemetryDTO cam = new CameraTelemetryDTO
             {
                 camera_id = laneId,
@@ -225,11 +230,20 @@ public class IntersectionVisionManager : MonoBehaviour
                         avg_speed = 0f,
                         max_capacity = allCameras[i].maxZoneCapacity
                     }
-                }
+                },
+                emergency_vehicle_detected = allCameras[i].emergencyDetected,
+                emergency_approach = allCameras[i].emergencyDetected ? emergencyApproach : null
             };
             batch.cameras.Add(cam);
             
-            Debug.Log($"[{intersectionId}] Камера {i} ({axisType}-ось) → {laneId}");
+            if (allCameras[i].emergencyDetected)
+            {
+                Debug.Log($"[{intersectionId}] 🚨 Спецтранспорт на камере {i} ({axisType}-ось) → {laneId}, approach={emergencyApproach}");
+            }
+            else
+            {
+                Debug.Log($"[{intersectionId}] Камера {i} ({axisType}-ось) → {laneId}");
+            }
         }
 
         if (batch.cameras.Count == 0) yield break;
@@ -261,16 +275,25 @@ public class IntersectionVisionManager : MonoBehaviour
                     BatchResponseDTO responseData = JsonUtility.FromJson<BatchResponseDTO>(jsonResponse);
                     if (responseData?.responses != null && intersectionController != null)
                     {
+                        // Проверяем emergency коридор
+                        bool emergencyActive = responseData.emergency_corridor_active;
+                        
                         foreach (var resp in responseData.responses)
                         {
                             if (enableDebugLogs)
-                                Debug.Log($"[{intersectionId}] Command {resp.camera_id}: {resp.target_phase} ({resp.green_duration}s)");
+                                Debug.Log($"[{intersectionId}] Command {resp.camera_id}: {resp.target_phase} ({resp.green_duration}s, emergency={resp.emergency_override})");
 
                             intersectionController.ReceiveCommandForLane(
                                 resp.camera_id,
                                 resp.target_phase,
                                 resp.green_duration
                             );
+                        }
+                        
+                        // Если emergency активен — сообщаем контроллеру
+                        if (emergencyActive && intersectionController != null)
+                        {
+                            intersectionController.SetEmergencyMode(true, responseData.emergency_corridor_phase);
                         }
                     }
                 }
@@ -337,17 +360,20 @@ public class IntersectionVisionManager : MonoBehaviour
     // Вспомогательные классы
 
     [System.Serializable]
-    private class BatchResponseDTO
-    {
-        public string type;
-        public List<SingleResponseDTO> responses;
-    }
-
-    [System.Serializable]
     private class SingleResponseDTO
     {
         public string camera_id;
         public string target_phase;
         public float green_duration;
+        public bool emergency_override;
+    }
+
+    [System.Serializable]
+    private class BatchResponseDTO
+    {
+        public string type;
+        public List<SingleResponseDTO> responses;
+        public bool emergency_corridor_active;
+        public string emergency_corridor_phase;
     }
 }

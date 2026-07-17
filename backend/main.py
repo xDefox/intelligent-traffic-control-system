@@ -75,8 +75,30 @@ async def receive_batch_telemetry(batch: BatchTelemetryDTO):
     Unity шлёт:  1 POST вместо N отдельных POST.
     Backend отвечает: массив команд для каждой камеры.
     """
-    responses = await orchestrator.handle_batch_telemetry(batch)
-    return BatchResponseDTO(responses=responses)
+    responses, emergency_active, emergency_phase = await orchestrator.handle_batch_telemetry(batch)
+    
+    # Добавляем emergency_override флаг в каждый ответ где active
+    for resp in responses:
+        if emergency_active and emergency_phase:
+            # Определяем, относится ли камера к emergency фазе
+            from backend.services.graph_manager import traffic_network
+            # direction = approach (извлекаем из camera_id как в orchestrator.py)
+            direction = resp.camera_id.split("_approach_")[-1] if "_approach_" in resp.camera_id else resp.camera_id
+            direction = f"approach_{direction}" if not direction.startswith("approach_") else direction
+            approaches = None
+            phases_config = traffic_network.intersection_phases.get(batch.intersection_id, {})
+            for pn, pd in phases_config.items():
+                if pn == emergency_phase:
+                    approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
+                    break
+            if approaches and direction in approaches:
+                resp.emergency_override = True
+    
+    return BatchResponseDTO(
+        responses=responses,
+        emergency_corridor_active=emergency_active,
+        emergency_corridor_phase=emergency_phase
+    )
 
 
 @app.get("/api/v1/state")

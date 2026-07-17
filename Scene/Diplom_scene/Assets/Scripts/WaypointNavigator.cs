@@ -39,6 +39,9 @@ public class WaypointNavigator : MonoBehaviour
     // Светофор
     private bool isStoppedByLight = false;
     private TrafficLightViewer currentTrafficLight;
+    
+    // EMERGENCY режим (спецтранспорт игнорирует светофоры)
+    private bool emergencyMode = false;
 
     // Physics
     private Rigidbody rb;
@@ -104,6 +107,28 @@ public class WaypointNavigator : MonoBehaviour
     {
         isStoppedByLight = false;
         currentTrafficLight = null;
+    }
+
+    /// <summary>
+    /// Включить/выключить emergency режим (игнорирование светофоров)
+    /// </summary>
+    public void SetEmergencyMode(bool enabled)
+    {
+        emergencyMode = enabled;
+        if (enabled)
+        {
+            isStoppedByLight = false;
+            currentTrafficLight = null;
+            Debug.Log($"[WaypointNavigator] 🚨 Emergency режим ВКЛЮЧЁН на {gameObject.name}");
+        }
+    }
+
+    /// <summary>
+    /// Проверить, включён ли emergency режим (для детекции камерами)
+    /// </summary>
+    public bool IsEmergencyMode()
+    {
+        return emergencyMode;
     }
 
     /// <summary>
@@ -232,6 +257,14 @@ public class WaypointNavigator : MonoBehaviour
     {
         if (other.CompareTag("StopTrigger"))
         {
+            // EMERGENCY: спецтранспорт игнорирует светофоры
+            if (emergencyMode)
+            {
+                isStoppedByLight = false;
+                currentTrafficLight = null;
+                return;
+            }
+
             // Пока мы стоим или тремся в триггере стоп-линии — ещё НЕ на перекрёстке
             isOnIntersection = false;
 
