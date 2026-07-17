@@ -26,15 +26,17 @@ import os
 # Легко править: добавьте словарь в "intersections" или строку в "links".
 DEFAULT_NETWORK = {
     "intersections": [
-        {"id": "intersection_1", "type": "T", "position": {"x": 0, "z": 0}},
-        {"id": "intersection_2", "type": "X", "position": {"x": -50, "z": 0}},
-        {"id": "intersection_3", "type": "X", "position": {"x": 50, "z": 0}},
+        {"id": "intersection_1", "type": "T", "position": {"x": 100, "z": 0}},
+        {"id": "intersection_2", "type": "X", "position": {"x": 50, "z": 0}},
+        {"id": "intersection_3X", "type": "X", "position": {"x": 0, "z": 0}},
+        {"id": "intersection_3Z", "type": "X", "position": {"x": 50, "z": 50}},
     ],
     "links": [
         "lane_intersection_1_approach_1 -> lane_intersection_2_approach_0",
         "lane_intersection_2_approach_1 -> lane_intersection_1_approach_0",
         "lane_intersection_2_approach_1 -> lane_intersection_3_approach_0",
-        "lane_intersection_3_approach_1 -> lane_intersection_2_approach_0",
+        "lane_intersection_3X_approach_1 -> lane_intersection_2_approach_0",
+        "lane_intersection_3Z_approach_2 -> lane_intersection_2_approach_3",
     ],
 }
 
