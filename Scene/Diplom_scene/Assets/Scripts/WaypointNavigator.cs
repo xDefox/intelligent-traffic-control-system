@@ -65,6 +65,11 @@ public class WaypointNavigator : MonoBehaviour
     [Tooltip("Угол (градусов), при котором машина считается поворачивающей")]
     public float rightOfWayTurnAngleThreshold = 30f;
 
+    [Header("Аварийное удаление застрявших машин")]
+    [Tooltip("Время (сек), после которого застрявшую машину на повороте удаляем")]
+    public float stuckOnTurnTimeout = 5.0f;
+    private float stuckTimer = 0f;
+
     void Start()
     {
         originalSpeed = speed;
@@ -237,6 +242,112 @@ public class WaypointNavigator : MonoBehaviour
     }
 
     /// <summary>
+    /// Проверка правила правой руки (помеха справа) на перекрёстках.
+    /// Если текущий waypoint — перекрёсток с компонентом IntersectionRightOfWay,
+    /// машина уступает дорогу тем, кто приближается справа.
+    /// </summary>
+    private void CheckIntersectionRightOfWay(ref float targetSpeed)
+    {
+        // Проверяем, есть ли на текущем waypoint компонент правила правой руки
+        if (currentNode == null || !currentNode.isIntersection) return;
+
+        // Ищем компонент IntersectionRightOfWay на currentNode или родителе
+        if (currentIntersectionRule == null)
+        {
+            currentIntersectionRule = currentNode.GetComponent<IntersectionRightOfWay>();
+            // Если нет на самом waypoint, ищем на родительском объекте (перекрёстке)
+            if (currentIntersectionRule == null && currentNode.transform.parent != null)
+            {
+                currentIntersectionRule = currentNode.transform.parent.GetComponentInChildren<IntersectionRightOfWay>();
+            }
+        }
+
+        if (currentIntersectionRule == null) return;
+
+        // Проверяем дистанцию до перекрёстка — правило действует только в радиусе детекции
+        float distanceToIntersection = Vector3.Distance(transform.position, currentIntersectionRule.transform.position);
+        if (distanceToIntersection > currentIntersectionRule.detectionRadius * 1.5f)
+        {
+            // Слишком далеко от перекрёстка — сбрасываем состояние
+            if (isYieldingAtIntersection || isDeadlockCreeping)
+            {
+                ResetIntersectionState();
+            }
+            // Сбрасываем isOnIntersection, если машина уехала
+            if (isOnIntersection)
+            {
+                isOnIntersection = false;
+            }
+            return;
+        }
+
+        // Вычисляем, поворачивает ли машина
+        UpdateTurningState();
+
+        // Проверяем, нужно ли уступать (передаём isOnIntersection и isTurning)
+        bool isDeadlockActive;
+        bool shouldYield = currentIntersectionRule.CheckRightOfWay(
+            transform.position, transform.forward, gameObject, out isDeadlockActive, 
+            isOnIntersection, isTurning);
+
+        if (isDeadlockActive)
+        {
+            // Режим дедлока — подкрадываемся
+            HandleDeadlockMode(ref targetSpeed);
+        }
+        else if (shouldYield)
+        {
+            // Уступаем — торможим
+            isYieldingAtIntersection = true;
+            isDeadlockCreeping = false;
+            isInDeadlockPause = false;
+            targetSpeed = 0f;
+        }
+        else
+        {
+            // Путь свободен — сбрасываем состояние
+            if (isYieldingAtIntersection || isDeadlockCreeping)
+            {
+                ResetIntersectionState();
+            }
+        }
+
+        // Проверяем, застряла ли машина на повороте на перекрёстке
+        CheckStuckOnTurn();
+    }
+
+    /// <summary>
+    /// Проверка застревания машины на повороте на перекрёстке.
+    /// Если машина на перекрёстке, поворачивает и не движется - удаляем её.
+    /// </summary>
+    private void CheckStuckOnTurn()
+    {
+        // Проверяем только если машина на перекрёстке и поворачивает
+        if (!isOnIntersection || !isTurning)
+        {
+            stuckTimer = 0f;
+            return;
+        }
+
+        // Проверяем, почти ли остановилась машина
+        if (speed < 0.1f)
+        {
+            stuckTimer += Time.deltaTime;
+            
+            if (stuckTimer > stuckOnTurnTimeout)
+            {
+                Debug.Log($"[WaypointNavigator] 🗑️ Машина {gameObject.name} застряла на повороте на перекрёстке, удаляем!");
+                Destroy(gameObject);
+            }
+        }
+        else
+        {
+            // Машина движется - сбрасываем таймер
+            stuckTimer = 0f;
+        }
+    }
+
+    /// <summary>
     /// Переход к следующему waypoint
     /// </summary>
     private void ReachedWaypoint()
@@ -292,6 +403,12 @@ public class WaypointNavigator : MonoBehaviour
         }
     }
 
+    void OnTriggerEnter(Collider other)
+    {
+        // При входе в зону стоп-линии ничего не делаем
+        // ПДД проверяется в Update() до входа в зону
+    }
+
     void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("StopTrigger"))
@@ -301,6 +418,16 @@ public class WaypointNavigator : MonoBehaviour
 
             // Выехали из триггера стоп-линии -> выехали НА перекрёсток!
             isOnIntersection = true;
+            
+            // Находим IntersectionRightOfWay, если ещё не нашли
+            if (currentIntersectionRule == null && currentNode != null)
+            {
+                currentIntersectionRule = currentNode.GetComponent<IntersectionRightOfWay>();
+                if (currentIntersectionRule == null && currentNode.transform.parent != null)
+                {
+                    currentIntersectionRule = currentNode.transform.parent.GetComponentInChildren<IntersectionRightOfWay>();
+                }
+            }
             
             // Уведомляем IntersectionRightOfWay, что машина на перекрёстке
             if (currentIntersectionRule != null)
@@ -330,73 +457,6 @@ public class WaypointNavigator : MonoBehaviour
         }
 
         return originalSpeed;
-    }
-
-    /// <summary>
-    /// Проверка правила правой руки (помеха справа) на перекрёстках.
-    /// Если текущий waypoint — перекрёсток с компонентом IntersectionRightOfWay,
-    /// машина уступает дорогу тем, кто приближается справа.
-    /// </summary>
-    private void CheckIntersectionRightOfWay(ref float targetSpeed)
-    {
-        // Проверяем, есть ли на текущем waypoint компонент правила правой руки
-        if (currentNode == null || !currentNode.isIntersection) return;
-
-        // Ищем компонент IntersectionRightOfWay на currentNode или родителе
-        if (currentIntersectionRule == null)
-        {
-            currentIntersectionRule = currentNode.GetComponent<IntersectionRightOfWay>();
-            // Если нет на самом waypoint, ищем на родительском объекте (перекрёстке)
-            if (currentIntersectionRule == null && currentNode.transform.parent != null)
-            {
-                currentIntersectionRule = currentNode.transform.parent.GetComponentInChildren<IntersectionRightOfWay>();
-            }
-        }
-
-        if (currentIntersectionRule == null) return;
-
-        // Проверяем дистанцию до перекрёстка — правило действует только в радиусе детекции
-        float distanceToIntersection = Vector3.Distance(transform.position, currentIntersectionRule.transform.position);
-        if (distanceToIntersection > currentIntersectionRule.detectionRadius * 1.5f)
-        {
-            // Слишком далеко от перекрёстка — сбрасываем состояние
-            if (isYieldingAtIntersection || isDeadlockCreeping)
-            {
-                ResetIntersectionState();
-            }
-            return;
-        }
-
-        // Вычисляем, поворачивает ли машина
-        UpdateTurningState();
-
-        // Проверяем, нужно ли уступать (передаём isOnIntersection и isTurning)
-        bool isDeadlockActive;
-        bool shouldYield = currentIntersectionRule.CheckRightOfWay(
-            transform.position, transform.forward, gameObject, out isDeadlockActive, 
-            isOnIntersection, isTurning);
-
-        if (isDeadlockActive)
-        {
-            // Режим дедлока — подкрадываемся
-            HandleDeadlockMode(ref targetSpeed);
-        }
-        else if (shouldYield)
-        {
-            // Уступаем — торможим
-            isYieldingAtIntersection = true;
-            isDeadlockCreeping = false;
-            isInDeadlockPause = false;
-            targetSpeed = 0f;
-        }
-        else
-        {
-            // Путь свободен — сбрасываем состояние
-            if (isYieldingAtIntersection || isDeadlockCreeping)
-            {
-                ResetIntersectionState();
-            }
-        }
     }
 
     /// <summary>
@@ -475,6 +535,8 @@ public class WaypointNavigator : MonoBehaviour
         isInDeadlockPause = false;
         deadlockCreepTimer = 0f;
         deadlockPauseTimer = 0f;
+        isOnIntersection = false;
+        stuckTimer = 0f; // Сбрасываем и таймер застревания
     }
 
     /// <summary>
