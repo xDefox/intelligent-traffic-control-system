@@ -58,6 +58,12 @@ public class WaypointNavigator : MonoBehaviour
 
     // Стоп-триггер светофора
     private bool isOnIntersection = false;
+    
+    // Повороты
+    private bool isTurning = false;
+    [Header("Параметры поворотов")]
+    [Tooltip("Угол (градусов), при котором машина считается поворачивающей")]
+    public float rightOfWayTurnAngleThreshold = 30f;
 
     void Start()
     {
@@ -295,6 +301,12 @@ public class WaypointNavigator : MonoBehaviour
 
             // Выехали из триггера стоп-линии -> выехали НА перекрёсток!
             isOnIntersection = true;
+            
+            // Уведомляем IntersectionRightOfWay, что машина на перекрёстке
+            if (currentIntersectionRule != null)
+            {
+                currentIntersectionRule.MarkCarOnIntersection(gameObject);
+            }
         }
     }
 
@@ -355,10 +367,14 @@ public class WaypointNavigator : MonoBehaviour
             return;
         }
 
-        // Проверяем, нужно ли уступать
+        // Вычисляем, поворачивает ли машина
+        UpdateTurningState();
+
+        // Проверяем, нужно ли уступать (передаём isOnIntersection и isTurning)
         bool isDeadlockActive;
         bool shouldYield = currentIntersectionRule.CheckRightOfWay(
-            transform.position, transform.forward, gameObject, out isDeadlockActive);
+            transform.position, transform.forward, gameObject, out isDeadlockActive, 
+            isOnIntersection, isTurning);
 
         if (isDeadlockActive)
         {
@@ -367,7 +383,7 @@ public class WaypointNavigator : MonoBehaviour
         }
         else if (shouldYield)
         {
-            // Уступаем — тормозим
+            // Уступаем — торможим
             isYieldingAtIntersection = true;
             isDeadlockCreeping = false;
             isInDeadlockPause = false;
@@ -381,6 +397,37 @@ public class WaypointNavigator : MonoBehaviour
                 ResetIntersectionState();
             }
         }
+    }
+
+    /// <summary>
+    /// Проверяет, поворачивает ли машина на перекрёстке.
+    /// Машина считается поворачивающей, если угол между её направлением
+    /// и направлением к waypoint превышает порог.
+    /// </summary>
+    private void UpdateTurningState()
+    {
+        if (currentNode == null)
+        {
+            isTurning = false;
+            return;
+        }
+        
+        // Направление к waypoint
+        Vector3 directionToTarget = (currentNode.transform.position - transform.position).normalized;
+        directionToTarget.y = 0;
+        
+        // Угол между текущим направлением машины и направлением к waypoint
+        float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
+        
+        isTurning = angleToTarget > rightOfWayTurnAngleThreshold;
+    }
+
+    /// <summary>
+    /// Публичный метод для проверки поворота (вызывается из IntersectionRightOfWay).
+    /// </summary>
+    public bool IsTurning()
+    {
+        return isTurning;
     }
 
     /// <summary>

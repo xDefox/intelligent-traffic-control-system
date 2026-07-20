@@ -15,6 +15,11 @@ using System.Collections.Generic;
 /// - Если машина уступает дольше maxWaitTime, она активирует режим "срочного проезда":
 ///   сначала пропускает одну машину справа (в порядке очереди), потом делает рывок.
 /// - Если все стороны заблокированы — приоритет у того, кто ждал дольше всех.
+/// 
+/// УЛУЧШЕНИЯ (v0.8.0):
+/// - Машины на перекрёстке (isOnIntersection) имеют приоритет над приближающимися
+/// - Машины, едущие прямо, имеют приоритет над поворачивающими
+/// - Разделение на "прямо" и "повернули" для корректного уступа
 /// </summary>
 public class IntersectionRightOfWay : MonoBehaviour
 {
@@ -46,11 +51,20 @@ public class IntersectionRightOfWay : MonoBehaviour
     [Range(0f, 1f)]
     public float approachThreshold = 0.3f;
 
+    [Header("Параметры приоритета")]
+    [Tooltip("Время (сек), в течение которого машина считается 'на перекрёстке' после выхода из StopTrigger")]
+    public float onIntersectionGracePeriod = 2.0f;
+    [Tooltip("Угол (градусов), при котором машина считается поворачивающей (отклонение от центрального направления)")]
+    public float turnAngleThreshold = 30f;
+
     [Header("Визуализация")]
     public bool showDebugGizmos = true;
 
     // Словарь для отслеживания времени ожидания каждой машины (GameObject -> время начала ожидания)
     private Dictionary<GameObject, float> carWaitTimers = new Dictionary<GameObject, float>();
+    
+    // Словарь для отслеживания машин на перекрёстке (GameObject -> время выхода на перекрёсток)
+    private Dictionary<GameObject, float> carsOnIntersection = new Dictionary<GameObject, float>();
 
     // Словарь состояния подкрадывания: сколько раз машина уже подкралась
     private Dictionary<GameObject, int> creepCount = new Dictionary<GameObject, int>();
@@ -59,6 +73,9 @@ public class IntersectionRightOfWay : MonoBehaviour
     {
         // Очищаем словари от уничтоженных машин
         CleanupDestroyedCars();
+        
+        // Очищаем машины, которые успели пройти перекрёсток
+        CleanupPassedIntersectionCars();
     }
 
     /// <summary>
@@ -67,16 +84,18 @@ public class IntersectionRightOfWay : MonoBehaviour
     /// <param name="carPosition">Позиция проверяющей машины</param>
     /// <param name="carForward">Направление вперёд проверяющей машины</param>
     /// <param name="requestingCar">GameObject проверяющей машины (чтобы игнорировать саму себя)</param>
-    /// <param name="targetSpeed">Скорость, с которой машина хочет ехать (будет изменена при необходимости)</param>
     /// <param name="isStopped">Была ли машина уже остановлена (чтобы отличать торможение от стоянки)</param>
+    /// <param name="isOnIntersection">Машина уже на перекрёстке (проехала stop-линию)</param>
+    /// <param name="isTurning">Машина поворачивает (отклонение от центрального направления waypoint)</param>
     /// <returns>true, если нужно полностью остановиться, false — если можно ехать</returns>
     public bool CheckRightOfWay(Vector3 carPosition, Vector3 carForward, GameObject requestingCar,
-                                out bool isDeadlockActive)
+                               out bool isDeadlockActive, bool isOnIntersection = false, bool isTurning = false)
     {
         isDeadlockActive = false;
 
         // Проверяем, есть ли помеха справа
-        bool hasRightObstacle = HasCarOnRight(carPosition, carForward, requestingCar, out float rightCarDistance);
+        bool hasRightObstacle = HasCarOnRight(carPosition, carForward, requestingCar, out float rightCarDistance, 
+                                            isOnIntersection, isTurning);
 
         if (hasRightObstacle)
         {
@@ -139,9 +158,28 @@ public class IntersectionRightOfWay : MonoBehaviour
     }
 
     /// <summary>
-    /// Проверить, есть ли машина справа, которой нужно уступить.
+    /// Пометить машину как находящуюся на перекрёстке.
+    /// Вызывается из WaypointNavigator когда машина выходит из StopTrigger.
     /// </summary>
-    private bool HasCarOnRight(Vector3 myPosition, Vector3 myForward, GameObject myCar, out float closestDistance)
+    public void MarkCarOnIntersection(GameObject car)
+    {
+        carsOnIntersection[car] = Time.time;
+    }
+
+    /// <summary>
+    /// Проверить, находится ли машина на перекрёстке.
+    /// </summary>
+    public bool IsCarOnIntersection(GameObject car)
+    {
+        return carsOnIntersection.ContainsKey(car);
+    }
+
+    /// <summary>
+    /// Проверить, есть ли машина справа, которой нужно уступить.
+    /// УЛУЧШЕНО: учитывает приоритет машин на перекрёстке и прямого движения.
+    /// </summary>
+    private bool HasCarOnRight(Vector3 myPosition, Vector3 myForward, GameObject myCar, out float closestDistance,
+                              bool isOnIntersection = false, bool isTurning = false)
     {
         closestDistance = float.MaxValue;
         bool foundCar = false;
@@ -169,6 +207,48 @@ public class IntersectionRightOfWay : MonoBehaviour
             if (signedAngle >= angleMin && signedAngle <= angleMax)
             {
                 float distanceToOther = Vector3.Distance(myPosition, otherPosition);
+                
+                // Проверяем, движется ли другая машина в сторону перекрёстка
+                Vector3 otherForward = otherCar.forward;
+                Vector3 toIntersection = (transform.position - otherPosition).normalized;
+
+                float approachDot = Vector3.Dot(otherForward, toIntersection);
+                
+                // Проверяем, находится ли другая машина на перекрёстке
+                bool otherIsOnIntersection = IsCarOnIntersection(col.gameObject);
+                
+                // Проверяем, поворачивает ли другая машина
+                // (получаем WaypointNavigator и проверяем угол поворота)
+                WaypointNavigator otherNav = col.GetComponent<WaypointNavigator>();
+                bool otherIsTurning = false;
+                if (otherNav != null)
+                {
+                    // Проверяем, есть ли у другой машины waypoint и насколько она отклоняется
+                    // от прямого направления к перекрёстку
+                    otherIsTurning = otherNav.IsTurning();
+                }
+
+                // ЛОГИКА ПРИОРИТЕТА:
+                // 1. Машины на перекрёстке имеют ПРИОРИТЕТ над приближающимися
+                // 2. Машины, едущие прямо, имеют приоритет над поворачивающими
+                
+                // Если машина справа уже на перекрёстке - уступаем ВСЕГДА
+                if (otherIsOnIntersection)
+                {
+                    closestDistance = Mathf.Min(closestDistance, distanceToOther);
+                    foundCar = true;
+                    continue;
+                }
+                
+                // Если машина справа едет прямо, а мы поворачиваем - уступаем
+                if (!otherIsTurning && isTurning)
+                {
+                    closestDistance = Mathf.Min(closestDistance, distanceToOther);
+                    foundCar = true;
+                    continue;
+                }
+                
+                // Если машина справа ближе минимальной дистанции - уступаем
                 if (distanceToOther < minRightCarDistance)
                 {
                     closestDistance = Mathf.Min(closestDistance, distanceToOther);
@@ -177,10 +257,6 @@ public class IntersectionRightOfWay : MonoBehaviour
                 }
 
                 // Проверяем, движется ли другая машина в сторону перекрёстка
-                Vector3 otherForward = otherCar.forward;
-                Vector3 toIntersection = (transform.position - otherPosition).normalized;
-
-                float approachDot = Vector3.Dot(otherForward, toIntersection);
                 if (approachDot > approachThreshold)
                 {
                     // Проверяем, что другая машина ещё не проехала перекрёсток
@@ -215,10 +291,49 @@ public class IntersectionRightOfWay : MonoBehaviour
             }
         }
 
+        foreach (var kvp in carsOnIntersection)
+        {
+            if (kvp.Key == null)
+            {
+                toRemove.Add(kvp.Key);
+            }
+        }
+
         foreach (var car in toRemove)
         {
             carWaitTimers.Remove(car);
+            carsOnIntersection.Remove(car);
             creepCount.Remove(car);
+        }
+    }
+
+    /// <summary>
+    /// Очистка машин, которые успели пройти перекрёсток.
+    /// </summary>
+    private void CleanupPassedIntersectionCars()
+    {
+        List<GameObject> toRemove = new List<GameObject>();
+        
+        foreach (var kvp in carsOnIntersection)
+        {
+            if (kvp.Key == null)
+            {
+                toRemove.Add(kvp.Key);
+            }
+            else
+            {
+                // Проверяем, не успела ли машина пройти перекрёсток
+                float timeOnIntersection = Time.time - kvp.Value;
+                if (timeOnIntersection > onIntersectionGracePeriod)
+                {
+                    toRemove.Add(kvp.Key);
+                }
+            }
+        }
+        
+        foreach (var car in toRemove)
+        {
+            carsOnIntersection.Remove(car);
         }
     }
 
