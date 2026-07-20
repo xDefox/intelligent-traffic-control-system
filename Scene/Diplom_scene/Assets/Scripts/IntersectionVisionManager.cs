@@ -54,8 +54,21 @@ public class IntersectionVisionManager : MonoBehaviour
     {
         public string camera_id;
         public List<LaneDetectionDTO> lanes;
+        // Camera-First Design: метаданные камеры для автоматического построения графа
+        public string direction;  // N, S, E, W
+        public SerializableVector3 world_position;
+        public SerializableVector3 world_rotation;
         public bool emergency_vehicle_detected;
         public string emergency_approach;
+    }
+
+    [System.Serializable]
+    private class SerializableVector3
+    {
+        public float x, y, z;
+        public SerializableVector3() {}
+        public SerializableVector3(Vector3 v) { x = v.x; y = v.y; z = v.z; }
+        public Vector3 ToVector3() { return new Vector3(x, y, z); }
     }
 
     // Кэш камер для batch inference
@@ -218,6 +231,11 @@ public class IntersectionVisionManager : MonoBehaviour
             // Определяем подход для emergency (approach_0,1 = X; approach_2,3 = Z)
             string emergencyApproach = $"approach_{approachIndex}";
             
+            // Camera-First Design: добавляем метаданные камеры
+            string direction = allCameras[i].GetWorldDirection();
+            Vector3 worldPos = allCameras[i].GetWorldPosition();
+            Vector3 worldRot = allCameras[i].GetWorldRotation();
+
             CameraTelemetryDTO cam = new CameraTelemetryDTO
             {
                 camera_id = laneId,
@@ -231,6 +249,9 @@ public class IntersectionVisionManager : MonoBehaviour
                         max_capacity = allCameras[i].maxZoneCapacity
                     }
                 },
+                direction = direction,
+                world_position = new SerializableVector3(worldPos),
+                world_rotation = new SerializableVector3(worldRot),
                 emergency_vehicle_detected = allCameras[i].emergencyDetected,
                 emergency_approach = allCameras[i].emergencyDetected ? emergencyApproach : null
             };

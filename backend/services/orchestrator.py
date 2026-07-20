@@ -118,6 +118,17 @@ class TrafficOrchestrator:
         # Получаем команды зелёной волны
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
         
+        # ШАГ 0.5: Регистрация камер (Camera-First Design)
+        for cam in batch.cameras:
+            if cam.direction and cam.world_position:
+                traffic_network.register_camera({
+                    "camera_id": cam.camera_id,
+                    "intersection_id": inter_id,
+                    "direction": cam.direction,
+                    "world_position": cam.world_position,
+                    "world_rotation": cam.world_rotation,
+                })
+        
         # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
         async with traffic_network.lane_pool_lock:
             for cam in batch.cameras:

@@ -111,5 +111,16 @@ async def get_full_state():
     }
 
 
+@app.get("/api/v1/congestion-map")
+async def get_congestion_map():
+    """
+    Camera-First Design: карта загруженности всех полос.
+    Unity-машины запрашивают этот endpoint, чтобы не выбирать переполненные дороги.
+    Возвращает: { "lane_intersection_1_approach_0": 0.6, ... }
+    """
+    from backend.services.graph_manager import traffic_network
+    return traffic_network.get_congestion_map()
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8050, reload=True)

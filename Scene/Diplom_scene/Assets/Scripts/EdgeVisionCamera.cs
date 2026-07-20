@@ -52,6 +52,47 @@ public class EdgeVisionCamera : MonoBehaviour
         emergencyDetectedCount = 0;
     }
 
+    #region Camera-First Design: Direction Detection
+
+    /// <summary>
+    /// Определяет направление камеры из transform.forward.
+    /// Возвращает: N, S, E, W (север, юг, восток, запад)
+    /// </summary>
+    public string GetWorldDirection()
+    {
+        Vector3 forward = transform.forward;
+
+        // Определяем доминирующую ось
+        if (Mathf.Abs(forward.x) > Mathf.Abs(forward.z))
+        {
+            // X-axis (восток-запад)
+            return forward.x > 0 ? "E" : "W";
+        }
+        else
+        {
+            // Z-axis (север-юг)
+            return forward.z > 0 ? "N" : "S";
+        }
+    }
+
+    /// <summary>
+    /// Возвращает мировые координаты камеры
+    /// </summary>
+    public Vector3 GetWorldPosition()
+    {
+        return transform.position;
+    }
+
+    /// <summary>
+    /// Возвращает мировой rotation камеры (euler angles)
+    /// </summary>
+    public Vector3 GetWorldRotation()
+    {
+        return transform.eulerAngles;
+    }
+
+    #endregion
+
     [Header("Зона детекции (ROI) для этой камеры")]
     public Vector2[] roiPolygon = new Vector2[]
     {

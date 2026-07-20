@@ -20,6 +20,19 @@ class CameraTelemetryDTO(BaseModel):
     """Телеметрия от одной камеры внутри batch-запроса"""
     camera_id: str
     lanes: List[LaneDetectionDTO]
+    # Camera-First Design: метаданные камеры для автоматического построения графа
+    direction: Optional[str] = Field(
+        default=None,
+        description="Направление камеры: N, S, E, W (определяется из transform.forward)"
+    )
+    world_position: Optional[dict] = Field(
+        default=None,
+        description="Мировые координаты камеры: {x, y, z}"
+    )
+    world_rotation: Optional[dict] = Field(
+        default=None,
+        description="Мировой rotation камеры: {x, y, z} (euler angles)"
+    )
     emergency_vehicle_detected: bool = Field(
         default=False,
         description="True если камера детектировала спецтранспорт (полиция, скорая, пожарные)"
