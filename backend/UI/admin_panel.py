@@ -231,7 +231,7 @@ class TrafficUIFactory:
         page.theme_mode = ft.ThemeMode.DARK
         page.padding = 20
 
-        # ===== Вкладка "Список" =====
+# ===== Вкладка "Список" =====
         list_tab = ft.Container(
             alignment=ft.Alignment.TOP_LEFT,
             content=ft.Column([
@@ -252,21 +252,45 @@ class TrafficUIFactory:
             ], scroll=ft.ScrollMode.AUTO, expand=True),
         )
 
+        # ===== Вкладка "Статистика" =====
+        self.stats_text = ft.Text("Загрузка статистики...", size=14)
+        self.avg_wait_text = ft.Text("Среднее время ожидания: -", size=16, weight=ft.FontWeight.BOLD, color="yellow")
+        self.efficiency_text = ft.Text("Эффективность сети: -", size=16, weight=ft.FontWeight.BOLD, color="green")
+        self.phase_switches_text = ft.Text("Всего переключений фаз: -", size=14)
+        
+        self.stats_grid = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+        
+        stats_tab = ft.Container(
+            alignment=ft.Alignment.TOP_LEFT,
+            content=ft.Column([
+                ft.Text("📈 Статистика трафика", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                ft.Row([
+                    self.avg_wait_text,
+                    self.efficiency_text,
+                    self.phase_switches_text,
+                ], spacing=20),
+                ft.Divider(),
+                self.stats_grid,
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
+        )
+
         # ===== Табы =====
         self.tab_bar = ft.TabBar(
             tab_alignment=ft.TabAlignment.START,
             tabs=[
                 ft.Tab(label=ft.Text("📋 Список")),
+                ft.Tab(label=ft.Text("📈 Статистика")),
             ],
         )
 
         self.tab_bar_view = ft.TabBarView(
             expand=True,
-            controls=[list_tab],
+            controls=[list_tab, stats_tab],
         )
 
         self.tabs = ft.Tabs(
-            length=1,
+            length=2,
             selected_index=0,
             expand=True,
             content=ft.Column(
@@ -367,9 +391,65 @@ class TrafficUIFactory:
             self.map.update_lane_update(data)
             changed = True
 
+        # Обновляем статистику
+        self._update_statistics()
+
         if changed:
             self.map.refresh()
             self.apply_filter()
+
+    def _update_statistics(self):
+        """Обновить статистику в UI"""
+        from backend.services.statistics import traffic_stats
+        
+        stats = traffic_stats.get_full_statistics()
+        summary = stats.get("network_summary", {})
+        
+        # Обновляем общие метрики
+        avg_wait = summary.get("avg_wait_time", 0)
+        self.avg_wait_text.value = f"Среднее время ожидания: {avg_wait:.1f}с"
+        
+        total_switches = summary.get("total_phase_switches", 0)
+        self.phase_switches_text.value = f"Всего переключений фаз: {total_switches}"
+        
+        # Эффективность (средняя по всем перекрёсткам)
+        total_intersections = summary.get("total_intersections", 0)
+        if total_intersections > 0:
+            total_green = sum(
+                s.get("green_time_total", 0) for s in stats.get("intersections", {}).values()
+            )
+            total_red = sum(
+                s.get("red_time_total", 0) for s in stats.get("intersections", {}).values()
+            )
+            total_time = total_green + total_red
+            efficiency = (total_green / total_time * 100) if total_time > 0 else 0
+            self.efficiency_text.value = f"Эффективность сети: {efficiency:.1f}%"
+        
+        # Обновляем сетку статистики по перекрёсткам
+        self.stats_grid.controls.clear()
+        for inter_id, inter_stats in stats.get("intersections", {}).items():
+            inter_card = ft.Container(
+                content=ft.Column([
+                    ft.Text(f"🛑 {inter_id}", size=16, weight=ft.FontWeight.BOLD, color="blue"),
+                    ft.Row([
+                        ft.Text(f"Машин: {inter_stats.get('total_cars', 0)}", size=12),
+                        ft.Text(f"Время ожидания: {inter_stats.get('avg_wait_time', 0):.1f}с", size=12),
+                        ft.Text(f"Эффективность: {inter_stats.get('efficiency_pct', 0):.1f}%", size=12),
+                        ft.Text(f"Переключения: {inter_stats.get('phase_switches', 0)}", size=12),
+                    ], spacing=10),
+                ], spacing=5),
+                bgcolor="#23272A",
+                padding=10,
+                border_radius=8,
+                border=ft.border.Border(
+                    left=ft.border.BorderSide(2, "blue"),
+                ),
+            )
+            self.stats_grid.controls.append(inter_card)
+        
+        # Обновляем страницу
+        if self.page:
+            self.page.update()
 
     async def connect_to_backend(self):
         uri = "ws://127.0.0.1:8050/ws/monitor"

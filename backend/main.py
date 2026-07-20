@@ -122,5 +122,36 @@ async def get_congestion_map():
     return traffic_network.get_congestion_map()
 
 
+@app.get("/api/v1/statistics")
+async def get_statistics():
+    """
+    Получить статистику трафика.
+    
+    Возвращает:
+    - Время ожидания (average waiting time)
+    - Нагруженность (congestion level)
+    - Эффективность переключения фаз
+    - Исторические данные
+    """
+    from backend.services.statistics import traffic_stats
+    return traffic_stats.get_full_statistics()
+
+
+@app.get("/api/v1/statistics/{lane_id}")
+async def get_lane_statistics(lane_id: str, limit: int = 50):
+    """
+    Получить исторические данные для конкретной полосы.
+    
+    Args:
+        lane_id: ID полосы (например, "lane_intersection_1_approach_0")
+        limit: количество записей (по умолчанию 50)
+    """
+    from backend.services.statistics import traffic_stats
+    return {
+        "lane_id": lane_id,
+        "history": traffic_stats.get_lane_history(lane_id, limit),
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8050, reload=True)

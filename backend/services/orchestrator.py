@@ -9,6 +9,7 @@ from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
+from backend.services.statistics import traffic_stats
 from backend.core.logger import debug, info, warning, error
 import time
 
@@ -243,6 +244,35 @@ class TrafficOrchestrator:
             if pn == active_phase:
                 active_approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
                 break
+        
+        # ШАГ 5.5: Записываем статистику переключения фазы
+        # Получаем предыдущую фазу
+        prev_phase = self.phase_manager.get_state(inter_id)
+        prev_active_phase = prev_phase.active_phase if prev_phase else None
+        
+        # Если фаза изменилась - записываем статистику
+        if prev_active_phase != active_phase:
+            traffic_stats.record_phase_change(inter_id, active_phase, active_approaches)
+        
+        # ШАГ 5.6: Записываем статистику для всех полос
+        for cam in batch.cameras:
+            direction = cam.camera_id.split("_approach_")[-1] if "_approach_" in cam.camera_id else cam.camera_id
+            direction = f"approach_{direction}" if not direction.startswith("approach_") else direction
+            is_active = direction in active_approaches
+            
+            for lane in cam.lanes:
+                norm_lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
+                lane_state = traffic_network.lane_pool.get(norm_lane_id, {})
+                congestion = lane_state.get("congestion_index", 0.0)
+                
+                traffic_stats.record_lane_data(
+                    intersection_id=inter_id,
+                    lane_id=norm_lane_id,
+                    car_count=lane.car_count,
+                    avg_speed=lane.avg_speed,
+                    congestion=congestion,
+                    is_green=is_active,
+                )
         
         # ШАГ 6: Формируем ответы и одно UI-сообщение
         responses = []
