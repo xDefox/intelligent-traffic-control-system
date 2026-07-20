@@ -46,6 +46,12 @@ public class IntersectionManager : MonoBehaviour
     private string emergencyPhase = null;
     private Coroutine emergencyCoroutine = null;
 
+    [Header("Fallback: автоматический возврат к автономному режиму")]
+    [Tooltip("Сколько запросов без ответа до переключения на автономный режим")]
+    public int fallbackRequestThreshold = 5;
+    private int failedRequestCount = 0;
+    private Coroutine fallbackCheckCoroutine = null;
+
     void Start()
     {
         // Явно включаем начальную фазу при старте, чтобы светофоры ожили
@@ -55,6 +61,9 @@ public class IntersectionManager : MonoBehaviour
         {
             cycleCoroutine = StartCoroutine(IntersectionCycle());
         }
+        
+        // Запускаем мониторинг fallback
+        fallbackCheckCoroutine = StartCoroutine(FallbackCheckRoutine());
     }
 
     // Автономный режим по осям
@@ -433,4 +442,55 @@ public class IntersectionManager : MonoBehaviour
             }
         }
     }
+
+    #region Fallback: автоматический возврат к автономному режиму
+
+    /// <summary>
+    /// Вызывается при успешном ответе от бэкенда - сбрасывает счётчик неудач.
+    /// </summary>
+    public void OnBackendResponseSuccess()
+    {
+        failedRequestCount = 0;
+        if (enableDebugLogs) Debug.Log($"[IntersectionManager] ✅ Backend ответил, fallback счётчик сброшен");
+    }
+
+    /// <summary>
+    /// Вызывается при неудачном запросе - увеличивает счётчик.
+    /// </summary>
+    public void OnBackendResponseFailed()
+    {
+        failedRequestCount++;
+        if (enableDebugLogs) Debug.Log($"[IntersectionManager] ❌ Backend НЕ ответил, fallback счётчик: {failedRequestCount}/{fallbackRequestThreshold}");
+    }
+
+    /// <summary>
+    /// Проверяет, нужно ли вернуться к автономному режиму.
+    /// Если неудачных запросов > порога - включаем автономный цикл.
+    /// </summary>
+    private IEnumerator FallbackCheckRoutine()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(1f);
+            
+            // Если AI-управление отключено и счётчик неудач превышен
+            if (!useAutonomousCycle && failedRequestCount >= fallbackRequestThreshold)
+            {
+                Debug.Log($"[IntersectionManager] ⚠️ Fallback: {failedRequestCount} неудач, возвращаемся к автономному режиму");
+                
+                // Сбрасываем счётчик
+                failedRequestCount = 0;
+                
+                // Включаем автономный цикл
+                useAutonomousCycle = true;
+                if (cycleCoroutine == null)
+                {
+                    cycleCoroutine = StartCoroutine(IntersectionCycle());
+                    Debug.Log("[IntersectionManager] ✅ Автономный цикл запущен (fallback)");
+                }
+            }
+        }
+    }
+
+    #endregion
 }

@@ -286,6 +286,12 @@ public class IntersectionVisionManager : MonoBehaviour
 
             if (request.result == UnityWebRequest.Result.Success)
             {
+                // ✅ Успешный ответ - сбрасываем fallback счётчик
+                if (intersectionController != null)
+                {
+                    intersectionController.OnBackendResponseSuccess();
+                }
+
                 string jsonResponse = request.downloadHandler.text;
                 if (enableDebugLogs)
                     Debug.Log($"[{intersectionId}] Batch response: {jsonResponse}");
@@ -325,6 +331,11 @@ public class IntersectionVisionManager : MonoBehaviour
             }
             else
             {
+                // ❌ Неудачный запрос - увеличиваем fallback счётчик
+                if (intersectionController != null)
+                {
+                    intersectionController.OnBackendResponseFailed();
+                }
                 Debug.LogError($"[{intersectionId}] Batch request failed: {request.error}");
             }
         }
