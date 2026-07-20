@@ -48,6 +48,14 @@ public class TrafficGenerator : MonoBehaviour
     [Tooltip("Тег для спецтранспорта")]
     public string emergencyVehicleTag = "EmergencyVehicle";
 
+    [Header("Traffic Constraints")]
+    [Tooltip("Менеджер ограничений трафика (блокировка забитых дорог)")]
+    public TrafficConstraintsManager trafficConstraints;
+    
+    [Tooltip("Порог загруженности, выше которого не спавним на въезд (0-1)")]
+    [Range(0f, 1f)]
+    public float spawnCongestionThreshold = 0.7f;
+
     void Update()
     {
         timer += Time.deltaTime;
@@ -124,6 +132,38 @@ public class TrafficGenerator : MonoBehaviour
         foreach (var hit in hitColliders)
         {
             if (hit.CompareTag("Car")) return;  // Место занято — не спавним
+        }
+
+        // Проверяем загруженность дороги (если trafficConstraints назначен)
+        if (trafficConstraints != null)
+        {
+            string laneId = trafficConstraints.GetLaneIdForWaypoint(selectedRoute.startWaypoint);
+            if (!string.IsNullOrEmpty(laneId))
+            {
+                // laneId формат: "lane_intersection_1_approach_0"
+                // Нужно извлечь intersection_id и direction
+                string interId = laneId;
+                string direction = "";
+                
+                if (interId.StartsWith("lane_"))
+                {
+                    interId = interId.Substring(4);
+                }
+                
+                int idx = interId.LastIndexOf("_approach_");
+                if (idx > 0)
+                {
+                    direction = interId.Substring(idx + 9); // После "_approach_"
+                    interId = interId.Substring(0, idx);
+                }
+                
+                // Проверяем загруженность
+                if (!trafficConstraints.IsRoadAvailable(interId, direction))
+                {
+                    // Дорога забита - не спавним
+                    return;
+                }
+            }
         }
 
         // Спавним случайную машину из доступных префабов

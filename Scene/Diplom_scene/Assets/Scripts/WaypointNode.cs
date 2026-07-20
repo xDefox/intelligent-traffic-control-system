@@ -14,6 +14,16 @@ public class WaypointNode : MonoBehaviour
     [Header("Параметры узла")]
     [Tooltip("Это перекрёсток/развилка? (для отладки)")]
     public bool isIntersection = false;
+    
+    [Header("Traffic Constraints")]
+    [Tooltip("ID полосы (автоматически определяется из позиции и направления)")]
+    public string laneId = "";
+    
+    [Tooltip("Признак выхода с перекрёстка (для блокировки забитых дорог)")]
+    public bool isExitPoint = false;
+    
+    [Tooltip("Индекс камеры, отвечающей за эту полосу (0-3)")]
+    public int cameraIndex = -1;
 
     [Header("Визуализация")]
     public float gizmoSize = 1.0f;

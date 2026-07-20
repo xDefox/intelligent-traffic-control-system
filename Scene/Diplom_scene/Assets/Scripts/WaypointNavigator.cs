@@ -36,6 +36,22 @@ public class WaypointNavigator : MonoBehaviour
     private WaypointNode currentNode;
     private float originalSpeed;
 
+    [Header("Traffic Constraints")]
+    [Tooltip("Менеджер ограничений трафика (блокировка забитых дорог)")]
+    public TrafficConstraintsManager trafficConstraints;
+    
+    [Tooltip("Текущий перекрёсток, на котором мы находимся")]
+    private string currentIntersectionId = "";
+    
+    [Tooltip("Флаг: машина ждёт на перекрёстке (дороги забиты)")]
+    private bool isWaitingForRoad = false;
+    
+    [Tooltip("Время последней попытки выбора дороги (для периодической проверки)")]
+    private float lastRoadCheckTime = 0f;
+    
+    [Tooltip("Интервал проверки доступных дорог (секунды)")]
+    public float roadCheckInterval = 1.0f;
+    
     // Светофор
     private bool isStoppedByLight = false;
     private TrafficLightViewer currentTrafficLight;
@@ -98,8 +114,52 @@ public class WaypointNavigator : MonoBehaviour
     {
         if (currentNode == null) return;
 
+        // Если машина ждёт на перекрёстке (дороги забиты) - периодически проверяем
+        if (isWaitingForRoad && trafficConstraints != null)
+        {
+            lastRoadCheckTime += Time.deltaTime;
+            if (lastRoadCheckTime >= roadCheckInterval)
+            {
+                lastRoadCheckTime = 0f;
+                TryResumeFromWaiting();
+            }
+        }
+
         // Движение к текущему waypoint
         MoveToCurrentNode();
+    }
+    
+    /// <summary>
+    /// Попытка продолжить движение после ожидания (дорога освободилась)
+    /// </summary>
+    private void TryResumeFromWaiting()
+    {
+        if (currentNode == null || currentNode.neighbours == null) return;
+        
+        // Определяем текущий перекрёсток
+        string currentInterId = trafficConstraints.GetLaneIdForWaypoint(currentNode);
+        if (currentInterId.StartsWith("lane_"))
+        {
+            currentInterId = currentInterId.Substring(4);
+        }
+        
+        int idx = currentInterId.LastIndexOf("_approach_");
+        if (idx > 0)
+        {
+            currentInterId = currentInterId.Substring(0, idx);
+        }
+        
+        // Проверяем доступных соседей
+        List<WaypointNode> available = trafficConstraints.GetAvailableNeighbours(currentNode, currentInterId);
+        
+        if (available.Count > 0)
+        {
+            // Дорога освободилась! Выбираем новый путь
+            isWaitingForRoad = false;
+            WaypointNode nextNode = available[Random.Range(0, available.Count)];
+            currentNode = nextNode;
+            Debug.Log($"[WaypointNavigator] ✅ Машина {gameObject.name} продолжает движение: дорога освободилась");
+        }
     }
 
     /// <summary>
@@ -356,18 +416,93 @@ public class WaypointNavigator : MonoBehaviour
         ResetIntersectionState();
         currentIntersectionRule = null;
 
-        // Выбираем случайного соседа
-        WaypointNode nextNode = currentNode.GetRandomNeighbour();
+        // Выбираем лучшего доступного соседа (с учётом загруженности дорог)
+        WaypointSelectionResult result = GetBestAvailableNeighbour();
 
-        if (nextNode != null)
+        if (result.shouldDestroy)
         {
-            currentNode = nextNode;
+            // Финальный waypoint - машина уехала из системы
+            Destroy(gameObject);
+        }
+        else if (result.nextNode != null)
+        {
+            currentNode = result.nextNode;
+        }
+        // Если result.nextNode == null и !result.shouldDestroy - машина ждёт
+    }
+    
+    /// <summary>
+    /// Результат выбора соседа
+    /// </summary>
+    private struct WaypointSelectionResult
+    {
+        public WaypointNode nextNode;
+        public bool shouldDestroy; // true = удалить машину (финальный waypoint)
+    }
+    
+    /// <summary>
+    /// Получить лучшего доступного соседа (с учётом загруженности дорог).
+    /// </summary>
+    private WaypointSelectionResult GetBestAvailableNeighbour()
+    {
+        WaypointSelectionResult result = new WaypointSelectionResult { nextNode = null, shouldDestroy = false };
+        
+        if (currentNode == null || currentNode.neighbours == null)
+        {
+            // Нет соседей - финальный waypoint
+            result.shouldDestroy = true;
+            return result;
+        }
+        
+        // Если trafficConstraints не назначен - используем случайного соседа
+        if (trafficConstraints == null)
+        {
+            result.nextNode = currentNode.GetRandomNeighbour();
+            if (result.nextNode == null)
+                result.shouldDestroy = true;
+            return result;
+        }
+        
+        // Определяем текущий перекрёсток
+        string currentInterId = trafficConstraints.GetLaneIdForWaypoint(currentNode);
+        if (currentInterId.StartsWith("lane_"))
+        {
+            currentInterId = currentInterId.Substring(4); // Убираем "lane_"
+        }
+        
+        // Находим индекс "_approach_"
+        int idx = currentInterId.LastIndexOf("_approach_");
+        if (idx > 0)
+        {
+            currentInterId = currentInterId.Substring(0, idx);
+        }
+        
+        // Получаем доступных соседей
+        List<WaypointNode> available = trafficConstraints.GetAvailableNeighbours(currentNode, currentInterId);
+        
+        if (available.Count == 0)
+        {
+            // Все дороги забиты - машина ждёт на перекрёстке
+            // НО! Если это финальный waypoint (нет соседей вообще) - удаляем
+            if (currentNode.neighbours.Count == 0)
+            {
+                // Финальный waypoint - машина уехала из системы
+                result.shouldDestroy = true;
+            }
+            else
+            {
+                // Машина ждёт - устанавливаем флаг
+                isWaitingForRoad = true;
+            }
         }
         else
         {
-            // Нет куда ехать - уничтожаем машину
-            Destroy(gameObject);
+            // Выбираем случайного из доступных
+            result.nextNode = available[Random.Range(0, available.Count)];
+            isWaitingForRoad = false; // Сбрасываем флаг, если нашли дорогу
         }
+        
+        return result;
     }
 
     void OnTriggerStay(Collider other)
