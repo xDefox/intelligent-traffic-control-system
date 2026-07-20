@@ -4,6 +4,7 @@ import json
 from typing import Dict, List
 from backend.services.graph_manager import traffic_network
 from backend.services.green_wave import green_wave_coordinator
+from backend.core.logger import debug, info, warning, error
 
 
 class CloudOrchestrator:
@@ -43,21 +44,21 @@ class CloudOrchestrator:
         self._emergency_phase = phase
         self._emergency_timer = 10.0  # Сброс таймера
         self._emergency_cascade_done = False
-        print(f"[CloudOrchestrator] 🚨 EMERGENCY: {intersection_id}/{approach} фаза={phase}")
+        info("CloudOrchestrator", f"🚨 EMERGENCY: {intersection_id}/{approach} phase={phase}")
 
     def start(self):
         """Запустить фоновый тикер (раз в секунду)"""
         if not self._running:
             self._running = True
             self._tick_task = asyncio.create_task(self._tick_loop())
-            # print("[CloudOrchestrator] Запущен (тикер раз в 1с)")
+            debug("CloudOrchestrator", "Started (ticker every 1s)")
 
     async def stop(self):
         """Остановить тикер"""
         self._running = False
         if self._tick_task:
             self._tick_task.cancel()
-        # print("[CloudOrchestrator] Остановлен")
+        debug("CloudOrchestrator", "Stopped")
 
     async def _tick_loop(self):
         """Фоновый цикл: анализ графа и рассылка команд"""
@@ -65,7 +66,7 @@ class CloudOrchestrator:
             try:
                 await self._cascade_tick()
             except Exception as e:
-                 print(f"❌ [CloudOrchestrator] Ошибка тика: {e}")
+                error("CloudOrchestrator", f"Tick error: {e}")
 
             await asyncio.sleep(1.0)
 
@@ -112,13 +113,13 @@ class CloudOrchestrator:
                             "emergency": True,
                         }
                         commands.insert(0, cascade_cmd)
-                        print(f"[CloudOrchestrator] 🚨 Каскад EMERGENCY на {up_inter} фаза={up_phase}")
+                        info("CloudOrchestrator", f"🚨 Cascade EMERGENCY on {up_inter} phase={up_phase}")
                 
                 self._emergency_cascade_done = True
             
             # Если таймер истёк — сбрасываем emergency
             if self._emergency_timer <= 0:
-                print(f"[CloudOrchestrator] ✅ Emergency завершён на {self._emergency_intersection}")
+                info("CloudOrchestrator", f"✅ Emergency completed on {self._emergency_intersection}")
                 self._emergency_active = False
                 self._emergency_intersection = None
                 self._emergency_approach = None

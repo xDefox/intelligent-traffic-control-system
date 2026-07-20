@@ -503,9 +503,51 @@ python -m backend.UI.admin_panel
 
 ---
 
-## 9. НОВЫЕ ВОЗМОЖНОСТИ (v0.7.0)
+## 9. ЛОГИРОВАНИЕ (v0.8.0)
 
-### 9.1. Camera-First Design
+### 9.1. Централизованный логгер
+
+**Файл:** `backend/core/logger.py`
+
+**Концепция:** Управляемое логирование через переменную окружения `LOG_LEVEL`.
+
+**Уровни логирования:**
+- `DEBUG` — все сообщения (много шума, для разработки)
+- `INFO` — основные события (рекомендуется для продакшена)
+- `WARNING` — только предупреждения и ошибки
+- `ERROR` — только ошибки
+- `OFF` — логирование отключено
+
+**Использование:**
+```python
+from backend.core.logger import debug, info, warning, error
+
+# DEBUG - для детальной отладки (видно только при LOG_LEVEL=DEBUG)
+debug("Orchestrator", f"Batch from {inter_id}: {len(batch.cameras)} cameras")
+
+# INFO - для важных событий (видно при LOG_LEVEL=INFO и ниже)
+info("CloudOrchestrator", f"🚨 EMERGENCY: {intersection_id}/{approach} phase={phase}")
+
+# WARNING - для предупреждений
+warning("GraphManager", f"No cameras registered for {intersection_id}")
+
+# ERROR - для ошибок
+error("CloudOrchestrator", f"Tick error: {e}")
+```
+
+**Настройка:**
+```bash
+# По умолчанию INFO (только важные сообщения)
+python -m backend.main
+
+# Для отладки - включить DEBUG
+LOG_LEVEL=DEBUG python -m backend.main
+
+# Отключить логирование
+LOG_LEVEL=OFF python -m backend.main
+```
+
+### 9.2. Camera-First Design (v0.7.0)
 
 **Концепция:** Система строит карту дорог на основе данных камер, а не из конфиг-файла.
 
@@ -521,7 +563,7 @@ python -m backend.UI.admin_panel
 - `Scene/Diplom_scene/Assets/Scripts/EdgeVisionCamera.cs` - `GetWorldDirection()`
 - `Scene/Diplom_scene/Assets/Scripts/IntersectionVisionManager.cs` - метаданные в batch
 
-### 9.2. Fallback-механика
+### 9.3. Fallback-механика (v0.7.0)
 
 **Концепция:** При потере связи с бэкендом светофоры автоматически переключаются на статический режим.
 
@@ -534,6 +576,38 @@ python -m backend.UI.admin_panel
 - `Scene/Diplom_scene/Assets/Scripts/LightController.cs` - `OnBackendResponseSuccess/Failed()`, `FallbackCheckRoutine()`
 - `Scene/Diplom_scene/Assets/Scripts/IntersectionVisionManager.cs` - вызов fallback-методов
 
-### 9.3. Удалён граф из admin_panel
+### 9.4. Удалён граф из admin_panel
 
 - Вкладка "Граф" удалена (осталась только "Список")
+
+### 9.5. Unity Logger (v0.8.0)
+
+**Файл:** `Scene/Diplom_scene/Assets/Scripts/Logger.cs`
+
+**Концепция:** Централизованное логирование в Unity через PlayerPrefs.
+
+**Уровни логирования:**
+- `DEBUG` — все сообщения (много шума, для разработки)
+- `INFO` — основные события (рекомендуется для продакшена)
+- `WARNING` — только предупреждения
+- `ERROR` — только ошибки
+- `OFF` — логирование отключено
+
+**Использование:**
+```csharp
+// DEBUG - для детальной отладки (видно только при LOG_LEVEL=DEBUG)
+Logger.LogDebug("IntersectionVisionManager", $"Camera {i}: {cameraResults[i]} cars");
+
+// INFO - для важных событий (видно при LOG_LEVEL=INFO и ниже)
+Logger.LogInfo("IntersectionVisionManager", $"🚨 Emergency vehicle on camera {i}");
+
+// WARNING - для предупреждений
+Logger.LogWarning("IntersectionVisionManager", $"YOLO model not assigned!");
+
+// ERROR - для ошибок
+Logger.LogError("IntersectionVisionManager", $"Batch request failed: {request.error}");
+```
+
+**Настройка в Unity:**
+- Через PlayerPrefs: `PlayerPrefs.SetString("LOG_LEVEL", "DEBUG")`
+- Или в коде: `Logger.SetLogLevel(Logger.LogLevel.DEBUG)`

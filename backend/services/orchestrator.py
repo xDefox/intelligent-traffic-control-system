@@ -9,6 +9,7 @@ from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
+from backend.core.logger import debug, info, warning, error
 import time
 
 
@@ -93,9 +94,9 @@ class TrafficOrchestrator:
         inter_id = batch.intersection_id
         
         # DEBUG: логируем входящий batch
-        print(f"[DEBUG] Batch from {inter_id}: {len(batch.cameras)} cameras")
+        debug("Orchestrator", f"Batch from {inter_id}: {len(batch.cameras)} cameras")
         for cam in batch.cameras:
-            print(f"[DEBUG]   Camera: {cam.camera_id}")
+            debug("Orchestrator", f"  Camera: {cam.camera_id}")
         
         # ШАГ 0.5: Проверяем emergency (спецтранспорт)
         emergency_detected = False
@@ -108,7 +109,7 @@ class TrafficOrchestrator:
                 emergency_approach = cam.emergency_approach
                 # Определяем фазу для emergency подхода
                 emergency_phase = traffic_network.get_phase_for_approach(inter_id, emergency_approach)
-                print(f"[EMERGENCY] 🚨 Спецтранспорт на {inter_id}/{emergency_approach} → фаза {emergency_phase}")
+                info("Orchestrator", f"🚨 Emergency: {inter_id}/{emergency_approach} → phase {emergency_phase}")
                 break  # Первый обнаруженный = приоритет
         
         # Если emergency — сообщаем Cloud для каскадирования
@@ -135,7 +136,7 @@ class TrafficOrchestrator:
                 for lane in cam.lanes:
                     # Нормализуем lane_id: добавляем префикс "lane_" если его нет
                     lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
-                    print(f"[DEBUG]   Lane: {lane_id}, cars={lane.car_count}, max_cap={lane.max_capacity}")
+                    debug("Orchestrator", f"  Lane: {lane_id}, cars={lane.car_count}, max_cap={lane.max_capacity}")
                     traffic_network.update_lane_state(
                         lane_id=lane_id,
                         car_count=lane.car_count,
@@ -147,8 +148,8 @@ class TrafficOrchestrator:
         phases_config = traffic_network.intersection_phases.get(inter_id, {})
         phase_names = list(phases_config.keys())
         
-        print(f"[DEBUG]   Intersection {inter_id}: approaches={traffic_network.intersection_approaches.get(inter_id)}, phases={phase_names}")
-        print(f"[DEBUG]   Graph nodes: {len(traffic_network.graph.nodes)}, edges: {len(traffic_network.graph.edges)}")
+        debug("Orchestrator", f"  Intersection {inter_id}: approaches={traffic_network.intersection_approaches.get(inter_id)}, phases={phase_names}")
+        debug("Orchestrator", f"  Graph nodes: {len(traffic_network.graph.nodes)}, edges: {len(traffic_network.graph.edges)}")
         
         if not phase_names:
             return [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0) for cam in batch.cameras]
@@ -186,7 +187,7 @@ class TrafficOrchestrator:
         if emergency_override:
             emergency_phase = emergency_override.get("phase")
             if emergency_phase and emergency_phase in phase_names:
-                print(f"[EMERGENCY] 🚨 Принудительная фаза {emergency_phase} на {inter_id}")
+                info("Orchestrator", f"🚨 Emergency override: phase {emergency_phase} on {inter_id}")
                 active_phase = emergency_phase
                 self.phase_manager.switch_phase(inter_id, active_phase)
                 phase_state = self.phase_manager.get_or_create(inter_id)
