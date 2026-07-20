@@ -39,6 +39,19 @@ public class IntersectionManager : MonoBehaviour
     private float xGreenRemaining = 0f;
     private float zGreenRemaining = 0f;
 
+    [Header("EMERGENCY режим (зелёный коридор)")]
+    [Tooltip("Время мигания зелёного в emergency режиме")]
+    public float emergencyBlinkInterval = 0.3f;
+    private bool emergencyMode = false;
+    private string emergencyPhase = null;
+    private Coroutine emergencyCoroutine = null;
+
+    [Header("Fallback: автоматический возврат к автономному режиму")]
+    [Tooltip("Сколько запросов без ответа до переключения на автономный режим")]
+    public int fallbackRequestThreshold = 5;
+    private int failedRequestCount = 0;
+    private Coroutine fallbackCheckCoroutine = null;
+
     void Start()
     {
         // Явно включаем начальную фазу при старте, чтобы светофоры ожили
@@ -48,6 +61,9 @@ public class IntersectionManager : MonoBehaviour
         {
             cycleCoroutine = StartCoroutine(IntersectionCycle());
         }
+        
+        // Запускаем мониторинг fallback
+        fallbackCheckCoroutine = StartCoroutine(FallbackCheckRoutine());
     }
 
     // Автономный режим по осям
@@ -324,6 +340,98 @@ public class IntersectionManager : MonoBehaviour
         zIsTransitioning = false;
     }
 
+    /// <summary>
+    /// Включить/выключить EMERGENCY режим (зелёный коридор).
+    /// В emergency режиме зелёный мигает на фазе спецтранспорта,
+    /// а противоположная ось горит красным.
+    /// </summary>
+    public void SetEmergencyMode(bool active, string phase = null)
+    {
+        if (active && !emergencyMode)
+        {
+            emergencyMode = true;
+            emergencyPhase = phase;
+            
+            // Останавливаем автономный цикл
+            if (useAutonomousCycle && cycleCoroutine != null)
+            {
+                StopCoroutine(cycleCoroutine);
+                cycleCoroutine = null;
+                useAutonomousCycle = false;
+            }
+            
+            // Останавливаем обычные таймеры
+            if (xGreenCoroutine != null) { StopCoroutine(xGreenCoroutine); xGreenCoroutine = null; }
+            if (zGreenCoroutine != null) { StopCoroutine(zGreenCoroutine); zGreenCoroutine = null; }
+            
+            Debug.Log($"[IntersectionManager] 🚨 EMERGENCY режим ВКЛЮЧЁН! Фаза={phase}");
+            
+            // Запускаем мигание
+            if (emergencyCoroutine != null) StopCoroutine(emergencyCoroutine);
+            emergencyCoroutine = StartCoroutine(EmergencyBlinkRoutine());
+        }
+        else if (!active && emergencyMode)
+        {
+            emergencyMode = false;
+            emergencyPhase = null;
+            
+            if (emergencyCoroutine != null)
+            {
+                StopCoroutine(emergencyCoroutine);
+                emergencyCoroutine = null;
+            }
+            
+            Debug.Log("[IntersectionManager] ✅ EMERGENCY режим ВЫКЛЮЧЕН");
+            
+            // Возвращаем всё на красный
+            SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            xAxisState = AxisState.Red;
+            zAxisState = AxisState.Red;
+        }
+    }
+    
+    /// <summary>
+    /// Мигание зелёного на фазе спецтранспорта.
+    /// </summary>
+    private IEnumerator EmergencyBlinkRoutine()
+    {
+        while (emergencyMode)
+        {
+            // Определяем, какая ось должна гореть зелёным
+            // EW (X-axis) = approach_0,1; NS (Z-axis) = approach_2,3
+            bool isXAxisEmergency = (emergencyPhase == "EW");
+            
+            // Включаем зелёный на emergency оси
+            if (isXAxisEmergency)
+            {
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Green);
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            else
+            {
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Green);
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            
+            yield return new WaitForSeconds(emergencyBlinkInterval);
+            
+            if (!emergencyMode) yield break;
+            
+            // Гасим зелёный (красный на обеих)
+            if (isXAxisEmergency)
+            {
+                SetLightsState(xAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            else
+            {
+                SetLightsState(zAxisLights, TrafficLightViewer.LightColor.Red);
+            }
+            
+            yield return new WaitForSeconds(emergencyBlinkInterval);
+        }
+    }
+
     void SetLightsState(List<TrafficLightViewer> lights, TrafficLightViewer.LightColor color)
     {
         foreach (var light in lights)
@@ -334,4 +442,55 @@ public class IntersectionManager : MonoBehaviour
             }
         }
     }
+
+    #region Fallback: автоматический возврат к автономному режиму
+
+    /// <summary>
+    /// Вызывается при успешном ответе от бэкенда - сбрасывает счётчик неудач.
+    /// </summary>
+    public void OnBackendResponseSuccess()
+    {
+        failedRequestCount = 0;
+        if (enableDebugLogs) Debug.Log($"[IntersectionManager] ✅ Backend ответил, fallback счётчик сброшен");
+    }
+
+    /// <summary>
+    /// Вызывается при неудачном запросе - увеличивает счётчик.
+    /// </summary>
+    public void OnBackendResponseFailed()
+    {
+        failedRequestCount++;
+        if (enableDebugLogs) Debug.Log($"[IntersectionManager] ❌ Backend НЕ ответил, fallback счётчик: {failedRequestCount}/{fallbackRequestThreshold}");
+    }
+
+    /// <summary>
+    /// Проверяет, нужно ли вернуться к автономному режиму.
+    /// Если неудачных запросов > порога - включаем автономный цикл.
+    /// </summary>
+    private IEnumerator FallbackCheckRoutine()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(1f);
+            
+            // Если AI-управление отключено и счётчик неудач превышен
+            if (!useAutonomousCycle && failedRequestCount >= fallbackRequestThreshold)
+            {
+                Debug.Log($"[IntersectionManager] ⚠️ Fallback: {failedRequestCount} неудач, возвращаемся к автономному режиму");
+                
+                // Сбрасываем счётчик
+                failedRequestCount = 0;
+                
+                // Включаем автономный цикл
+                useAutonomousCycle = true;
+                if (cycleCoroutine == null)
+                {
+                    cycleCoroutine = StartCoroutine(IntersectionCycle());
+                    Debug.Log("[IntersectionManager] ✅ Автономный цикл запущен (fallback)");
+                }
+            }
+        }
+    }
+
+    #endregion
 }

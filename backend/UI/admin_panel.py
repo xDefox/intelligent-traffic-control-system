@@ -252,36 +252,21 @@ class TrafficUIFactory:
             ], scroll=ft.ScrollMode.AUTO, expand=True),
         )
 
-        # ===== Вкладка "Граф" =====
-        graph_tab = ft.Container(
-            alignment=ft.Alignment.TOP_LEFT,
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("🗺️ Граф дорожной сети", size=24, weight=ft.FontWeight.BOLD),
-                    ft.Text("Дороги: зелёные = активная фаза, серые = неактивная | Круги: загрузка",
-                            size=12, color="grey"),
-                ]),
-                ft.Divider(),
-                self.map.container,
-            ], scroll=ft.ScrollMode.AUTO, expand=True),
-        )
-
         # ===== Табы =====
         self.tab_bar = ft.TabBar(
             tab_alignment=ft.TabAlignment.START,
             tabs=[
                 ft.Tab(label=ft.Text("📋 Список")),
-                ft.Tab(label=ft.Text("🗺️ Граф")),
             ],
         )
 
         self.tab_bar_view = ft.TabBarView(
             expand=True,
-            controls=[list_tab, graph_tab],
+            controls=[list_tab],
         )
 
         self.tabs = ft.Tabs(
-            length=2,
+            length=1,
             selected_index=0,
             expand=True,
             content=ft.Column(

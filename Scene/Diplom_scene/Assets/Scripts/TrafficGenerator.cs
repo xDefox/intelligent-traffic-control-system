@@ -40,6 +40,14 @@ public class TrafficGenerator : MonoBehaviour
         ShowDebugGizmos = showRoadGizmos;
     }
 
+    [Header("Спавн спецтранспорта по клавише")]
+    [Tooltip("Клавиша для спавна полицейской машины")]
+    public KeyCode emergencySpawnKey = KeyCode.E;
+    [Tooltip("Префаб полицейской машины (опционально). Если не задан — использует случайный из carPrefabs")]
+    public GameObject policeCarPrefab;
+    [Tooltip("Тег для спецтранспорта")]
+    public string emergencyVehicleTag = "EmergencyVehicle";
+
     void Update()
     {
         timer += Time.deltaTime;
@@ -47,6 +55,58 @@ public class TrafficGenerator : MonoBehaviour
         {
             timer = 0f;
             SpawnRandomVehicle();
+        }
+
+        // Спавн полицейской машины по клавише
+        try
+        {
+            if (Input.GetKeyDown(emergencySpawnKey))
+            {
+                SpawnEmergencyVehicle();
+            }
+        }
+        catch (System.InvalidOperationException)
+        {
+            // Игнорируем при использовании Input System Package
+        }
+    }
+
+    /// <summary>
+    /// Спавнит полицейскую машину на случайном въезде.
+    /// </summary>
+    void SpawnEmergencyVehicle()
+    {
+        if (spawnRoutes.Count == 0) return;
+
+        SpawnRoute selectedRoute = spawnRoutes[Random.Range(0, spawnRoutes.Count)];
+        if (selectedRoute.startWaypoint == null || selectedRoute.spawnPoint == null) return;
+
+        // Проверяем, нет ли уже машины на спаунпоинте
+        Collider[] hitColliders = Physics.OverlapSphere(selectedRoute.spawnPoint.position, 0.7f);
+        foreach (var hit in hitColliders)
+        {
+            if (hit.CompareTag(emergencyVehicleTag) || hit.CompareTag("Car")) return;
+        }
+
+        // Выбираем префаб: полицейский или случайный
+        GameObject prefabToSpawn = policeCarPrefab != null ? policeCarPrefab : carPrefabs[Random.Range(0, carPrefabs.Count)];
+        
+        GameObject car = Instantiate(prefabToSpawn, selectedRoute.spawnPoint.position, selectedRoute.spawnPoint.rotation);
+        
+        // Добавляем тег спецтранспорта
+        car.tag = emergencyVehicleTag;
+        
+        activeCarCount++;
+        
+        var cleanup = car.AddComponent<CarCleanupHandler>();
+        cleanup.Initialize(this);
+
+        WaypointNavigator navigator = car.GetComponent<WaypointNavigator>();
+        if (navigator != null)
+        {
+            navigator.SetupNode(selectedRoute.startWaypoint);
+            navigator.SetEmergencyMode(true); // Включаем игнорирование светофоров
+            Debug.Log("[TrafficGenerator] 🚨 Полицейская машина заспавнена! Клавиша E");
         }
     }
 

@@ -95,10 +95,13 @@ class CityTrafficGraph:
         self.intersection_max_capacity: Dict[str, int] = {}
         self.intersection_phases: Dict[str, dict] = {}
         self.intersection_approaches: Dict[str, Set[int]] = {}
-        # Кэш upstream/downstream — топология графа статична (из конфига)
+        # Camera-First Design: реестр камер с метаданными
+        self.camera_registry: Dict[str, dict] = {}
+        # Кэш upstream/downstream — топология графа динамична
         self._upstream_cache: Dict[str, Dict[str, List[str]]] = {}
         self._downstream_cache: Dict[str, Dict[str, List[str]]] = {}
-        self._build_static_topology()
+        # Начинаем с пустого графа, строим из telemetry
+        self._build_from_telemetry()
 
     # ===================== ПОСТРОЕНИЕ ТОПОЛОГИИ =====================
 
@@ -115,6 +118,133 @@ class CityTrafficGraph:
                 lane_id=src, connected=True,
             )
         self._precompute_topology_cache()
+
+    def _build_from_telemetry(self):
+        """Построить граф из зарегистрированных камер (пустой старт)."""
+        self.graph.clear()
+        # Перестраиваем связи между камерами
+        self._build_edges_from_cameras()
+        self._precompute_topology_cache()
+
+    def register_camera(self, camera_data: dict):
+        """
+        Camera-First Design: зарегистрировать камеру с метаданными.
+        
+        Args:
+            camera_data: {
+                "camera_id": "intersection_1_approach_0",
+                "intersection_id": "intersection_1",
+                "direction": "E",  # N, S, E, W
+                "world_position": {"x": 105, "y": 1, "z": 0},
+                "world_rotation": {"x": 0, "y": 90, "z": 0}
+            }
+        """
+        camera_id = camera_data.get("camera_id")
+        if not camera_id:
+            return
+        
+        # Сохраняем метаданные камеры
+        self.camera_registry[camera_id] = {
+            "intersection_id": camera_data.get("intersection_id"),
+            "direction": camera_data.get("direction"),
+            "position": camera_data.get("world_position"),
+            "rotation": camera_data.get("world_rotation"),
+        }
+        
+        # Перестраиваем граф (топология может измениться)
+        self._build_edges_from_cameras()
+        self._precompute_topology_cache()
+
+    def _build_edges_from_cameras(self):
+        """
+        Camera-First Design: автоматически построить связи между камерами.
+        
+        Алгоритм:
+        - Камера A смотрит на E (восток), камера B смотрит на W (запад)
+        - Если расстояние между ними < 200м → они соединены дорогой
+        """
+        # Группируем камеры по перекрёсткам
+        cameras_by_inter: Dict[str, List[dict]] = {}
+        for cam_id, cam_data in self.camera_registry.items():
+            inter_id = cam_data.get("intersection_id")
+            if inter_id:
+                cameras_by_inter.setdefault(inter_id, []).append({
+                    "camera_id": cam_id,
+                    "direction": cam_data.get("direction"),
+                    "position": cam_data.get("position"),
+                })
+        
+        # Добавляем узлы
+        for inter_id, cameras in cameras_by_inter.items():
+            for cam in cameras:
+                direction = cam.get("direction", "")
+                if direction:
+                    # Преобразуем N/S/E/W в approach_0/1/2/3
+                    approach = self._direction_to_approach(direction)
+                    self.graph.add_node((inter_id, approach))
+        
+        # Ищем связи между камерами
+        camera_list = list(self.camera_registry.items())
+        for i, (cam_a_id, cam_a_data) in enumerate(camera_list):
+            for cam_b_id, cam_b_data in camera_list[i+1:]:
+                if self._cameras_are_connected(cam_a_data, cam_b_data):
+                    # Создаём ребро в обе стороны
+                    inter_a = cam_a_data.get("intersection_id")
+                    inter_b = cam_b_data.get("intersection_id")
+                    dir_a = cam_a_data.get("direction")
+                    dir_b = cam_b_data.get("direction")
+                    
+                    if inter_a and inter_b and dir_a and dir_b:
+                        approach_a = self._direction_to_approach(dir_a)
+                        approach_b = self._direction_to_approach(dir_b)
+                        
+                        # A → B (если A смотрит на B)
+                        self.graph.add_edge(
+                            (inter_a, approach_a), (inter_b, approach_b),
+                            lane_id=cam_a_id, connected=True,
+                        )
+                        # B → A (если B смотрит на A)
+                        self.graph.add_edge(
+                            (inter_b, approach_b), (inter_a, approach_a),
+                            lane_id=cam_b_id, connected=True,
+                        )
+
+    def _direction_to_approach(self, direction: str) -> str:
+        """Преобразовать N/S/E/W в approach_0/1/2/3."""
+        mapping = {"E": "approach_0", "W": "approach_1", "N": "approach_2", "S": "approach_3"}
+        return mapping.get(direction, "approach_0")
+
+    def _cameras_are_connected(self, cam_a: dict, cam_b: dict) -> bool:
+        """
+        Проверить, соединены ли две камеры дорогой.
+        
+        Условия:
+        1. Они смотрят друг на друга (противоположные направления)
+        2. Расстояние между камерами < 200м
+        """
+        dir_a = cam_a.get("direction")
+        dir_b = cam_b.get("direction")
+        
+        if not dir_a or not dir_b:
+            return False
+        
+        # Проверяем противоположность направлений
+        opposite_pairs = {("E", "W"), ("W", "E"), ("N", "S"), ("S", "N")}
+        if (dir_a, dir_b) not in opposite_pairs:
+            return False
+        
+        # Проверяем расстояние
+        pos_a = cam_a.get("position", {})
+        pos_b = cam_b.get("position", {})
+        
+        if not pos_a or not pos_b:
+            return False
+        
+        dx = pos_a.get("x", 0) - pos_b.get("x", 0)
+        dz = pos_a.get("z", 0) - pos_b.get("z", 0)
+        distance = (dx*dx + dz*dz) ** 0.5
+        
+        return distance < 200.0  # 200 метров порог
 
     def _register_approach(self, intersection_id: str, approach: str):
         """
@@ -371,6 +501,17 @@ class CityTrafficGraph:
                 "num_roads": self.get_num_roads(inter_id),
             }
         return state
+
+    def get_congestion_map(self) -> dict:
+        """
+        Camera-First Design: карта загруженности всех полос.
+        Возвращает: { "intersection_1_approach_0": 0.6, ... }
+        Используется Unity-машинами для ограничения переполненных дорог.
+        """
+        congestion_map = {}
+        for lane_id, data in self.lane_pool.items():
+            congestion_map[lane_id] = data.get("congestion_index", 0.0)
+        return congestion_map
 
 
 # Синглтон

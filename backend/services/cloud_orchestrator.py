@@ -11,6 +11,11 @@ class CloudOrchestrator:
     Cloud-уровень: агрегирует данные со всех перекрёстков,
     раз в секунду запускает каскадный анализ,
     даёт команды Fog-контроллерам.
+    
+    Поддерживает emergency "зелёный коридор" для спецтранспорта:
+    - Перекрёсток с emergency принудительно ставит GREEN на фазе спецтранспорта
+    - Upstream перекрёстки получают команду GREEN_WAVE для той же фазы
+    - Команды emergency имеют приоритет над обычными каскадными командами
     """
 
     def __init__(self, ws_manager=None):
@@ -18,6 +23,27 @@ class CloudOrchestrator:
         self._tick_task: asyncio.Task = None
         self._running = False
         self._last_cascade_commands: List[dict] = []
+        
+        # Emergency "зелёный коридор"
+        self._emergency_active: bool = False
+        self._emergency_intersection: str = None
+        self._emergency_approach: str = None
+        self._emergency_phase: str = None
+        self._emergency_timer: float = 10.0  # Длительность удержания emergency
+        self._emergency_cascade_done: bool = False
+    
+    def report_emergency(self, intersection_id: str, approach: str, phase: str):
+        """
+        Сообщить Cloud о детекции спецтранспорта.
+        Cloud каскадирует emergency на upstream перекрёстки.
+        """
+        self._emergency_active = True
+        self._emergency_intersection = intersection_id
+        self._emergency_approach = approach
+        self._emergency_phase = phase
+        self._emergency_timer = 10.0  # Сброс таймера
+        self._emergency_cascade_done = False
+        print(f"[CloudOrchestrator] 🚨 EMERGENCY: {intersection_id}/{approach} фаза={phase}")
 
     def start(self):
         """Запустить фоновый тикер (раз в секунду)"""
@@ -49,6 +75,55 @@ class CloudOrchestrator:
         # Добавляем команды зелёной волны
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
         commands.extend(green_wave_commands)
+        
+        # ===== EMERGENCY "ЗЕЛЁНЫЙ КОРИДОР" =====
+        if self._emergency_active:
+            self._emergency_timer -= 1.0  # Тик раз в секунду
+            
+            # Добавляем EMERGENCY команду для текущего перекрёстка
+            emergency_cmd = {
+                "target_intersection": self._emergency_intersection,
+                "action": "EMERGENCY_GREEN",
+                "approach": self._emergency_approach,
+                "phase": self._emergency_phase,
+                "reason": f"🚨 Спецтранспорт на {self._emergency_approach}",
+                "emergency": True,
+            }
+            commands.insert(0, emergency_cmd)  # Приоритет над всеми
+            
+            # Каскадируем на upstream перекрёстки (те, откуда едет спецтранспорт)
+            if not self._emergency_cascade_done:
+                upstream_map = traffic_network.get_upstream_intersections(self._emergency_intersection)
+                if self._emergency_approach in upstream_map:
+                    for up_inter in upstream_map[self._emergency_approach]:
+                        # Определяем фазу на upstream перекрёстке для этого подхода
+                        up_phase = None
+                        for lane_id, data in traffic_network.lane_pool.items():
+                            if data["intersection_id"] == up_inter:
+                                up_phase = traffic_network.get_phase_for_approach(up_inter, data["approach"])
+                                break
+                        
+                        cascade_cmd = {
+                            "target_intersection": up_inter,
+                            "action": "EMERGENCY_GREEN",
+                            "approach": self._emergency_approach,
+                            "phase": up_phase,
+                            "reason": f"🚨 Каскад: спецтранспорт едет к {self._emergency_intersection}",
+                            "emergency": True,
+                        }
+                        commands.insert(0, cascade_cmd)
+                        print(f"[CloudOrchestrator] 🚨 Каскад EMERGENCY на {up_inter} фаза={up_phase}")
+                
+                self._emergency_cascade_done = True
+            
+            # Если таймер истёк — сбрасываем emergency
+            if self._emergency_timer <= 0:
+                print(f"[CloudOrchestrator] ✅ Emergency завершён на {self._emergency_intersection}")
+                self._emergency_active = False
+                self._emergency_intersection = None
+                self._emergency_approach = None
+                self._emergency_phase = None
+                self._emergency_cascade_done = False
         
         self._last_cascade_commands = commands
 
