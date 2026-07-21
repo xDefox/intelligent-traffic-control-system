@@ -144,25 +144,40 @@ class CloudOrchestrator:
         
         self._last_cascade_commands = commands
 
-        # Считаем агрегаты
+        # Считаем агрегаты и пишем статистику
         total_cars = sum(d["car_count"] for d in traffic_network.lane_pool.values())
         inter_summary = {}
+        lane_congestions_by_inter: Dict[str, Dict[str, float]] = {}
         for lane_id, data in traffic_network.lane_pool.items():
             iid = data["intersection_id"]
             if iid not in inter_summary:
                 inter_summary[iid] = {"total_lanes": 0, "total_cars": 0, "avg_congestion": 0.0}
+                lane_congestions_by_inter[iid] = {}
             inter_summary[iid]["total_lanes"] += 1
             inter_summary[iid]["total_cars"] += data["car_count"]
             inter_summary[iid]["avg_congestion"] += data.get("congestion_index", 0)
+            lane_congestions_by_inter[iid][lane_id] = data.get("congestion_index", 0.0)
 
         for iid in inter_summary:
             lanes = inter_summary[iid]["total_lanes"]
             inter_summary[iid]["avg_congestion"] /= max(lanes, 1)
 
+        # Записываем congestion snapshot для каждого перекрёстка (каждую секунду)
+        for iid in inter_summary:
+            traffic_stats.record_congestion_snapshot(
+                intersection_id=iid,
+                lane_congestions=lane_congestions_by_inter.get(iid, {}),
+                total_cars=inter_summary[iid]["total_cars"],
+                active_lanes=inter_summary[iid]["total_lanes"],
+            )
+
         if self.ws_manager:
             # Подсчитываем активные зелёные волны
             active_waves = [c for c in commands if c.get("action") == "GREEN_WAVE_SYNC"]
             green_wave_active = len(active_waves) > 0
+            
+            # Получаем статистику для UI (передаём через WebSocket, т.к. админка в другом процессе)
+            stats_data = traffic_stats.get_full_statistics()
             
             state_payload = {
                 "type": "cloud_state",
@@ -171,6 +186,7 @@ class CloudOrchestrator:
                 "cascade_commands": commands,
                 "green_wave_active": green_wave_active,
                 "green_wave_corridors": [c.get("corridor", []) for c in active_waves],
+                "statistics": stats_data,  # Полная статистика для UI
             }
             await self.ws_manager.broadcast(json.dumps(state_payload))
 

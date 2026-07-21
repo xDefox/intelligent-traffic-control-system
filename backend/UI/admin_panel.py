@@ -5,6 +5,7 @@ import json
 import time
 import websockets
 import traceback
+from typing import Dict
 
 
 # ============ КОНФИГ ГРАФА ============
@@ -217,6 +218,7 @@ class TrafficUIFactory:
         self._pending_lane_updates = []
         self._pending_cloud_states = []
         self._flush_task = None
+        self._last_statistics = {}  # Статистика, полученная через WebSocket
 
         self.filter_dropdown = ft.Dropdown(
             label="Фильтр перекрёстков",
@@ -481,10 +483,15 @@ class TrafficUIFactory:
             self.apply_filter()
 
     def _update_statistics(self):
-        """Обновить аналитику в UI"""
-        from backend.services.statistics import traffic_stats
+        """Обновить аналитику в UI.
         
-        stats = traffic_stats.get_full_statistics()
+        Данные берутся из self._last_statistics, который наполняется 
+        через WebSocket из cloud_orchestrator (бэкенд).
+        """
+        stats = self._last_statistics
+        if not stats:
+            return
+        
         summary = stats.get("network_summary", {})
         
         # --- Header метрики ---
@@ -498,11 +505,9 @@ class TrafficUIFactory:
         # --- Рейтинг загруженности ---
         self.ranking_container.controls.clear()
         ranking = stats.get("congestion_ranking", [])
-        for i, r in enumerate(ranking[:10]):  # Top 10
+        for i, r in enumerate(ranking[:10]):
             congestion_pct = r["avg_congestion"] * 100
             color = "red" if congestion_pct > 70 else ("orange" if congestion_pct > 40 else "green")
-            
-            # Тренд иконка
             trend_symbol = r.get("trend", "")
             trend_color = "red" if "rising" in trend_symbol else "green"
             
@@ -520,7 +525,7 @@ class TrafficUIFactory:
             )
             self.ranking_container.controls.append(rank_card)
         
-        # --- График загрузки (canvas) ---
+        # --- График загрузки (гистограмма по рейтингу) ---
         self._draw_congestion_chart(stats)
         
         # --- Тренды ---
@@ -528,7 +533,6 @@ class TrafficUIFactory:
         for r in ranking:
             slope = r.get("trend_slope", 0)
             direction = r.get("trend", "→ stable")
-            
             trend_card = ft.Container(
                 content=ft.Row([
                     ft.Text(f"🛑 {r['intersection_id']}", size=13, weight=ft.FontWeight.BOLD, expand=True),
@@ -556,7 +560,6 @@ class TrafficUIFactory:
                 bgcolor="#2a1a1a", padding=6, border_radius=4,
             )
             self.emergency_log_container.controls.append(ev_card)
-        
         if not stats.get("emergency_log"):
             self.emergency_log_container.controls.append(
                 ft.Text("Нет emergency-событий", size=12, color="grey", italic=True)
@@ -578,7 +581,6 @@ class TrafficUIFactory:
                 bgcolor="#1a2a1a", padding=6, border_radius=4,
             )
             self.green_wave_log_container.controls.append(gw_card)
-        
         if not stats.get("green_wave_log"):
             self.green_wave_log_container.controls.append(
                 ft.Text("Нет зелёных волн", size=12, color="grey", italic=True)
@@ -601,104 +603,72 @@ class TrafficUIFactory:
                 padding=6, border_radius=4,
             )
             self.anomaly_log_container.controls.append(an_card)
-        
         if not stats.get("anomaly_log"):
             self.anomaly_log_container.controls.append(
                 ft.Text("Нет аномалий", size=12, color="grey", italic=True)
             )
         
-        # Обновляем страницу
         if self.page:
             self.page.update()
     
     def _draw_congestion_chart(self, stats: dict):
-        """Нарисовать график congestion по времени на canvas"""
-        from backend.services.statistics import traffic_stats
-        
-        # Берём первый перекрёсток из рейтинга (самый загруженный)
+        """Нарисовать гистограмму congestion по рейтингу (данные из WebSocket)"""
         ranking = stats.get("congestion_ranking", [])
         if not ranking:
             self.congestion_canvas.shapes = [
-                cv.Circle(x=340, y=100, radius=50, paint=ft.Paint(color="#333", style=ft.PaintingStyle.FILL)),
+                cv.Circle(x=340, y=100, radius=50,
+                          paint=ft.Paint(color="#333", style=ft.PaintingStyle.FILL)),
             ]
-            return
-        
-        target = ranking[0]["intersection_id"]
-        timeseries = traffic_stats.get_intersection_timeseries(target, seconds=300)
-        
-        if len(timeseries) < 2:
             return
         
         canvas_w = 680
         canvas_h = 200
-        margin_l = 50
+        margin_l = 60
         margin_r = 20
         margin_t = 20
-        margin_b = 30
+        margin_b = 40
         plot_w = canvas_w - margin_l - margin_r
         plot_h = canvas_h - margin_t - margin_b
-        
-        values = [s["avg_congestion"] for s in timeseries]
-        min_v = 0.0
-        max_v = max(1.0, max(values))
         
         shapes = [
             cv.Circle(x=canvas_w // 2, y=canvas_h // 2, radius=1000,
                       paint=ft.Paint(color="#1a1a2e", style=ft.PaintingStyle.FILL)),
         ]
         
-        # Сетка
+        # Горизонтальные линии сетки
         for i in range(5):
             y = margin_t + plot_h * (1 - i / 4)
             shapes.append(cv.Line(
                 margin_l, y, canvas_w - margin_r, y,
                 paint=ft.Paint(color="#2a2a3e", stroke_width=1, style=ft.PaintingStyle.STROKE),
             ))
-            # Label
-            label_val = min_v + (max_v - min_v) * i / 4
             shapes.append(cv.Text(
-                x=5, y=y - 6, text=f"{label_val:.0%}",
+                x=5, y=y - 6, text=f"{i*25}%",
                 paint=ft.Paint(color="#666", size=9),
             ))
         
-        # Линия
-        if len(values) > 1:
-            points = []
-            for idx, val in enumerate(values):
-                x = margin_l + (idx / (len(values) - 1)) * plot_w
-                y = margin_t + plot_h * (1 - (val - min_v) / (max_v - min_v))
-                points.append((x, y))
+        # Бары для топ-8 перекрёстков
+        top = ranking[:8]
+        bar_w = plot_w / len(top) - 4
+        for idx, r in enumerate(top):
+            val = r["avg_congestion"]
+            x = margin_l + (idx / len(top)) * plot_w + 2
+            h = val * plot_h
+            y = margin_t + plot_h - h
+            congestion_pct = val * 100
+            color = "#ff4444" if congestion_pct > 70 else ("#ffaa00" if congestion_pct > 40 else "#44ff44")
             
-            # Рисуем линию по точкам
-            for i in range(len(points) - 1):
-                x1, y1 = points[i]
-                x2, y2 = points[i + 1]
-                # Цвет в зависимости от значения
-                avg_val = (values[i] + values[i + 1]) / 2
-                color = "#ff4444" if avg_val > 0.7 else ("#ffaa00" if avg_val > 0.4 else "#44ff44")
-                shapes.append(cv.Line(
-                    x1, y1, x2, y2,
-                    paint=ft.Paint(color=color, stroke_width=2, style=ft.PaintingStyle.STROKE),
-                ))
-        
-        # Название перекрёстка на графике
-        shapes.append(cv.Text(
-            x=margin_l, y=canvas_h - 12, text=f"🛑 {target}",
-            paint=ft.Paint(color="#aaa", size=10),
-        ))
-        
-        # Подписи времени
-        n_labels = 5
-        for i in range(n_labels):
-            idx = int(i * (len(timeseries) - 1) / (n_labels - 1))
-            ts = timeseries[idx]["timestamp"]
-            t_str = time.strftime("%H:%M:%S", time.localtime(ts))
-            x = margin_l + (idx / (len(timeseries) - 1)) * plot_w
-            shapes.append(cv.Text(
-                x=x - 20, y=canvas_h - 12, text=t_str,
-                paint=ft.Paint(color="#666", size=8),
+            shapes.append(cv.Rectangle(
+                x=x, y=y, width=bar_w, height=h,
+                paint=ft.Paint(color=color, style=ft.PaintingStyle.FILL),
             ))
-        
+            # Название под баром
+            short_name = r['intersection_id'].replace("intersection_", "i")
+            shapes.append(cv.Text(
+                x=x, y=canvas_h - 14, text=short_name,
+                paint=ft.Paint(color="#aaa", size=8),
+            ))
+    
         self.congestion_canvas.shapes = shapes
 
     async def connect_to_backend(self):
@@ -758,6 +728,10 @@ class TrafficUIFactory:
             lanes_count = summary.get("total_lanes", 0)
             self._inter_congestion[inter_id] = f"{congestion_pct}% | Полос: {lanes_count}"
             self._refresh_header(inter_id)
+        
+        # Сохраняем полную статистику из бэкенда (там же наполняются time series и т.д.)
+        if "statistics" in data:
+            self._last_statistics = data["statistics"]
 
     def _apply_lane_update(self, data: dict):
         inter_id = data.get("intersection_id", "unknown")
