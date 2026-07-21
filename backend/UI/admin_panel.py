@@ -2,6 +2,7 @@ import flet as ft
 import flet.canvas as cv
 import asyncio
 import json
+import time
 import websockets
 import traceback
 
@@ -253,25 +254,106 @@ class TrafficUIFactory:
         )
 
         # ===== Вкладка "Статистика" =====
-        self.stats_text = ft.Text("Загрузка статистики...", size=14)
-        self.avg_wait_text = ft.Text("Среднее время ожидания: -", size=16, weight=ft.FontWeight.BOLD, color="yellow")
-        self.efficiency_text = ft.Text("Эффективность сети: -", size=16, weight=ft.FontWeight.BOLD, color="green")
-        self.phase_switches_text = ft.Text("Всего переключений фаз: -", size=14)
+        # --- Header метрики ---
+        self.uptime_text = ft.Text("Uptime: -", size=14, weight=ft.FontWeight.BOLD, color="grey")
+        self.network_load_text = ft.Text("Загрузка сети: -", size=16, weight=ft.FontWeight.BOLD, color="yellow")
+        self.total_switches_text = ft.Text("Переключений фаз: -", size=14)
+        self.emergency_count_text = ft.Text("🚨 Emergency: 0", size=14, color="red")
+        self.anomaly_count_text = ft.Text("⚠️ Аномалий: 0", size=14, color="orange")
+        self.gw_count_text = ft.Text("🟢 Зелёных волн: 0", size=14, color="green")
         
-        self.stats_grid = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+        # --- Рейтинг загруженности ---
+        self.ranking_container = ft.Column(spacing=6)
+        ranking_section = ft.Container(
+            content=ft.Column([
+                ft.Text("🏆 Рейтинг загруженности", size=18, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=4),
+                self.ranking_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+        
+        # --- График загрузки (кастомный canvas) ---
+        self.congestion_canvas = cv.Canvas(width=680, height=200)
+        self.congestion_canvas_container = ft.Container(
+            content=ft.Column([
+                ft.Text("📈 Congestion time series (5 мин)", size=16, weight=ft.FontWeight.BOLD),
+                self.congestion_canvas,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+        
+        # --- Тренды ---
+        self.trend_container = ft.Column(spacing=6)
+        trend_section = ft.Container(
+            content=ft.Column([
+                ft.Text("📊 Тренды загрузки", size=18, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=4),
+                self.trend_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+        
+        # --- Emergency лог ---
+        self.emergency_log_container = ft.Column(spacing=4)
+        emergency_section = ft.Container(
+            content=ft.Column([
+                ft.Text("🚨 Emergency лог", size=18, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=4),
+                self.emergency_log_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+        
+        # --- Green Wave лог ---
+        self.green_wave_log_container = ft.Column(spacing=4)
+        green_wave_section = ft.Container(
+            content=ft.Column([
+                ft.Text("🟢 Зелёные волны", size=18, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=4),
+                self.green_wave_log_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+        
+        # --- Аномалии ---
+        self.anomaly_log_container = ft.Column(spacing=4)
+        anomaly_section = ft.Container(
+            content=ft.Column([
+                ft.Text("⚠️ Аномалии и превышения", size=18, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=4),
+                self.anomaly_log_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
         
         stats_tab = ft.Container(
             alignment=ft.Alignment.TOP_LEFT,
             content=ft.Column([
-                ft.Text("📈 Статистика трафика", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("📈 Аналитика трафика", size=24, weight=ft.FontWeight.BOLD),
                 ft.Divider(),
                 ft.Row([
-                    self.avg_wait_text,
-                    self.efficiency_text,
-                    self.phase_switches_text,
-                ], spacing=20),
+                    self.uptime_text,
+                    self.network_load_text,
+                    self.total_switches_text,
+                    self.emergency_count_text,
+                    self.anomaly_count_text,
+                    self.gw_count_text,
+                ], spacing=16, wrap=True),
                 ft.Divider(),
-                self.stats_grid,
+                ft.Column([
+                    ranking_section,
+                    ft.Divider(height=8, color="transparent"),
+                    self.congestion_canvas_container,
+                    ft.Divider(height=8, color="transparent"),
+                    trend_section,
+                    ft.Divider(height=8, color="transparent"),
+                    emergency_section,
+                    ft.Divider(height=8, color="transparent"),
+                    green_wave_section,
+                    ft.Divider(height=8, color="transparent"),
+                    anomaly_section,
+                ], scroll=ft.ScrollMode.AUTO, expand=True),
             ], scroll=ft.ScrollMode.AUTO, expand=True),
         )
 
@@ -399,57 +481,225 @@ class TrafficUIFactory:
             self.apply_filter()
 
     def _update_statistics(self):
-        """Обновить статистику в UI"""
+        """Обновить аналитику в UI"""
         from backend.services.statistics import traffic_stats
         
         stats = traffic_stats.get_full_statistics()
         summary = stats.get("network_summary", {})
         
-        # Обновляем общие метрики
-        avg_wait = summary.get("avg_wait_time", 0)
-        self.avg_wait_text.value = f"Среднее время ожидания: {avg_wait:.1f}с"
+        # --- Header метрики ---
+        self.uptime_text.value = f"⏱ Uptime: {summary.get('uptime_display', '-')}"
+        self.network_load_text.value = f"📊 Загрузка сети: {summary.get('network_avg_congestion', 0)*100:.0f}%"
+        self.total_switches_text.value = f"🔄 Переключений фаз: {summary.get('total_phase_switches', 0)}"
+        self.emergency_count_text.value = f"🚨 Emergency: {summary.get('total_emergency_events', 0)}"
+        self.anomaly_count_text.value = f"⚠️ Аномалий: {summary.get('intersections_with_anomalies', 0)}"
+        self.gw_count_text.value = f"🟢 Зелёных волн: {summary.get('total_green_wave_events', 0)}"
         
-        total_switches = summary.get("total_phase_switches", 0)
-        self.phase_switches_text.value = f"Всего переключений фаз: {total_switches}"
+        # --- Рейтинг загруженности ---
+        self.ranking_container.controls.clear()
+        ranking = stats.get("congestion_ranking", [])
+        for i, r in enumerate(ranking[:10]):  # Top 10
+            congestion_pct = r["avg_congestion"] * 100
+            color = "red" if congestion_pct > 70 else ("orange" if congestion_pct > 40 else "green")
+            
+            # Тренд иконка
+            trend_symbol = r.get("trend", "")
+            trend_color = "red" if "rising" in trend_symbol else "green"
+            
+            rank_card = ft.Container(
+                content=ft.Row([
+                    ft.Text(f"#{i+1}", size=14, weight=ft.FontWeight.BOLD, color="grey"),
+                    ft.Text(f"🛑 {r['intersection_id']}", size=14, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(f"{congestion_pct:.0f}%", size=14, weight=ft.FontWeight.BOLD, color=color),
+                    ft.ProgressBar(value=r["avg_congestion"], width=100, color=color, bgcolor="#333"),
+                    ft.Text(f"🚗 {r['total_cars']}", size=11, color="grey"),
+                    ft.Text(f"{trend_symbol}", size=14, color=trend_color),
+                    ft.Text(f"🔄 {r['phase_switches']}", size=11, color="grey"),
+                ], spacing=8),
+                bgcolor="#2a2a3e", padding=8, border_radius=6,
+            )
+            self.ranking_container.controls.append(rank_card)
         
-        # Эффективность (средняя по всем перекрёсткам)
-        total_intersections = summary.get("total_intersections", 0)
-        if total_intersections > 0:
-            total_green = sum(
-                s.get("green_time_total", 0) for s in stats.get("intersections", {}).values()
-            )
-            total_red = sum(
-                s.get("red_time_total", 0) for s in stats.get("intersections", {}).values()
-            )
-            total_time = total_green + total_red
-            efficiency = (total_green / total_time * 100) if total_time > 0 else 0
-            self.efficiency_text.value = f"Эффективность сети: {efficiency:.1f}%"
+        # --- График загрузки (canvas) ---
+        self._draw_congestion_chart(stats)
         
-        # Обновляем сетку статистики по перекрёсткам
-        self.stats_grid.controls.clear()
-        for inter_id, inter_stats in stats.get("intersections", {}).items():
-            inter_card = ft.Container(
-                content=ft.Column([
-                    ft.Text(f"🛑 {inter_id}", size=16, weight=ft.FontWeight.BOLD, color="blue"),
-                    ft.Row([
-                        ft.Text(f"Машин: {inter_stats.get('total_cars', 0)}", size=12),
-                        ft.Text(f"Время ожидания: {inter_stats.get('avg_wait_time', 0):.1f}с", size=12),
-                        ft.Text(f"Эффективность: {inter_stats.get('efficiency_pct', 0):.1f}%", size=12),
-                        ft.Text(f"Переключения: {inter_stats.get('phase_switches', 0)}", size=12),
-                    ], spacing=10),
-                ], spacing=5),
-                bgcolor="#23272A",
-                padding=10,
-                border_radius=8,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(2, "blue"),
-                ),
+        # --- Тренды ---
+        self.trend_container.controls.clear()
+        for r in ranking:
+            slope = r.get("trend_slope", 0)
+            direction = r.get("trend", "→ stable")
+            
+            trend_card = ft.Container(
+                content=ft.Row([
+                    ft.Text(f"🛑 {r['intersection_id']}", size=13, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(direction, size=13, color="cyan"),
+                    ft.Text(f"({slope:+.5f}/s)", size=11, color="grey"),
+                ]),
+                bgcolor="#2a2a3e", padding=6, border_radius=4,
             )
-            self.stats_grid.controls.append(inter_card)
+            self.trend_container.controls.append(trend_card)
+        
+        # --- Emergency лог ---
+        self.emergency_log_container.controls.clear()
+        for ev in stats.get("emergency_log", []):
+            ev_time = time.strftime("%H:%M:%S", time.localtime(ev["timestamp"]))
+            cascade_str = f" → {len(ev.get('cascade', []))} upstream" if ev.get("cascade") else ""
+            ev_card = ft.Container(
+                content=ft.Row([
+                    ft.Text(f"🚨", size=16),
+                    ft.Text(f"[{ev_time}]", size=11, color="grey"),
+                    ft.Text(f"{ev['intersection_id']}/{ev['approach']}", size=13, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(f"phase: {ev['phase']}", size=12, color="yellow"),
+                    ft.Text(f"{ev['duration']:.1f}s", size=12, color="red"),
+                    ft.Text(cascade_str, size=11, color="orange"),
+                ], spacing=6),
+                bgcolor="#2a1a1a", padding=6, border_radius=4,
+            )
+            self.emergency_log_container.controls.append(ev_card)
+        
+        if not stats.get("emergency_log"):
+            self.emergency_log_container.controls.append(
+                ft.Text("Нет emergency-событий", size=12, color="grey", italic=True)
+            )
+        
+        # --- Green Wave лог ---
+        self.green_wave_log_container.controls.clear()
+        for gw in stats.get("green_wave_log", []):
+            gw_time = time.strftime("%H:%M:%S", time.localtime(gw["timestamp"]))
+            corridor_str = " → ".join(gw.get("corridor", []))
+            gw_card = ft.Container(
+                content=ft.Row([
+                    ft.Text(f"🟢", size=16),
+                    ft.Text(f"[{gw_time}]", size=11, color="grey"),
+                    ft.Text(f"{corridor_str}", size=13, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(f"phase: {gw['phase']}", size=12, color="yellow"),
+                    ft.Text(f"{gw['duration']:.1f}s", size=12, color="green"),
+                ], spacing=6),
+                bgcolor="#1a2a1a", padding=6, border_radius=4,
+            )
+            self.green_wave_log_container.controls.append(gw_card)
+        
+        if not stats.get("green_wave_log"):
+            self.green_wave_log_container.controls.append(
+                ft.Text("Нет зелёных волн", size=12, color="grey", italic=True)
+            )
+        
+        # --- Аномалии ---
+        self.anomaly_log_container.controls.clear()
+        for an in stats.get("anomaly_log", []):
+            an_time = time.strftime("%H:%M:%S", time.localtime(an["timestamp"]))
+            severity_icon = "🔴" if an["severity"] == "critical" else "⚠️"
+            sev_color = "red" if an["severity"] == "critical" else "orange"
+            an_card = ft.Container(
+                content=ft.Row([
+                    ft.Text(severity_icon, size=14),
+                    ft.Text(f"[{an_time}]", size=11, color="grey"),
+                    ft.Text(f"{an['intersection_id']}", size=13, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(an['message'], size=12, color=sev_color),
+                ], spacing=6),
+                bgcolor="#2a1a1a" if an["severity"] == "critical" else "#2a2a1a",
+                padding=6, border_radius=4,
+            )
+            self.anomaly_log_container.controls.append(an_card)
+        
+        if not stats.get("anomaly_log"):
+            self.anomaly_log_container.controls.append(
+                ft.Text("Нет аномалий", size=12, color="grey", italic=True)
+            )
         
         # Обновляем страницу
         if self.page:
             self.page.update()
+    
+    def _draw_congestion_chart(self, stats: dict):
+        """Нарисовать график congestion по времени на canvas"""
+        from backend.services.statistics import traffic_stats
+        
+        # Берём первый перекрёсток из рейтинга (самый загруженный)
+        ranking = stats.get("congestion_ranking", [])
+        if not ranking:
+            self.congestion_canvas.shapes = [
+                cv.Circle(x=340, y=100, radius=50, paint=ft.Paint(color="#333", style=ft.PaintingStyle.FILL)),
+            ]
+            return
+        
+        target = ranking[0]["intersection_id"]
+        timeseries = traffic_stats.get_intersection_timeseries(target, seconds=300)
+        
+        if len(timeseries) < 2:
+            return
+        
+        canvas_w = 680
+        canvas_h = 200
+        margin_l = 50
+        margin_r = 20
+        margin_t = 20
+        margin_b = 30
+        plot_w = canvas_w - margin_l - margin_r
+        plot_h = canvas_h - margin_t - margin_b
+        
+        values = [s["avg_congestion"] for s in timeseries]
+        min_v = 0.0
+        max_v = max(1.0, max(values))
+        
+        shapes = [
+            cv.Circle(x=canvas_w // 2, y=canvas_h // 2, radius=1000,
+                      paint=ft.Paint(color="#1a1a2e", style=ft.PaintingStyle.FILL)),
+        ]
+        
+        # Сетка
+        for i in range(5):
+            y = margin_t + plot_h * (1 - i / 4)
+            shapes.append(cv.Line(
+                margin_l, y, canvas_w - margin_r, y,
+                paint=ft.Paint(color="#2a2a3e", stroke_width=1, style=ft.PaintingStyle.STROKE),
+            ))
+            # Label
+            label_val = min_v + (max_v - min_v) * i / 4
+            shapes.append(cv.Text(
+                x=5, y=y - 6, text=f"{label_val:.0%}",
+                paint=ft.Paint(color="#666", size=9),
+            ))
+        
+        # Линия
+        if len(values) > 1:
+            points = []
+            for idx, val in enumerate(values):
+                x = margin_l + (idx / (len(values) - 1)) * plot_w
+                y = margin_t + plot_h * (1 - (val - min_v) / (max_v - min_v))
+                points.append((x, y))
+            
+            # Рисуем линию по точкам
+            for i in range(len(points) - 1):
+                x1, y1 = points[i]
+                x2, y2 = points[i + 1]
+                # Цвет в зависимости от значения
+                avg_val = (values[i] + values[i + 1]) / 2
+                color = "#ff4444" if avg_val > 0.7 else ("#ffaa00" if avg_val > 0.4 else "#44ff44")
+                shapes.append(cv.Line(
+                    x1, y1, x2, y2,
+                    paint=ft.Paint(color=color, stroke_width=2, style=ft.PaintingStyle.STROKE),
+                ))
+        
+        # Название перекрёстка на графике
+        shapes.append(cv.Text(
+            x=margin_l, y=canvas_h - 12, text=f"🛑 {target}",
+            paint=ft.Paint(color="#aaa", size=10),
+        ))
+        
+        # Подписи времени
+        n_labels = 5
+        for i in range(n_labels):
+            idx = int(i * (len(timeseries) - 1) / (n_labels - 1))
+            ts = timeseries[idx]["timestamp"]
+            t_str = time.strftime("%H:%M:%S", time.localtime(ts))
+            x = margin_l + (idx / (len(timeseries) - 1)) * plot_w
+            shapes.append(cv.Text(
+                x=x - 20, y=canvas_h - 12, text=t_str,
+                paint=ft.Paint(color="#666", size=8),
+            ))
+        
+        self.congestion_canvas.shapes = shapes
 
     async def connect_to_backend(self):
         uri = "ws://127.0.0.1:8050/ws/monitor"

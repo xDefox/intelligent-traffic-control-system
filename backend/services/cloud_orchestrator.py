@@ -4,6 +4,7 @@ import json
 from typing import Dict, List
 from backend.services.graph_manager import traffic_network
 from backend.services.green_wave import green_wave_coordinator
+from backend.services.statistics import traffic_stats
 from backend.core.logger import debug, info, warning, error
 
 
@@ -44,6 +45,7 @@ class CloudOrchestrator:
         self._emergency_phase = phase
         self._emergency_timer = 10.0  # Сброс таймера
         self._emergency_cascade_done = False
+        traffic_stats.start_emergency(intersection_id, approach, phase)
         info("CloudOrchestrator", f"🚨 EMERGENCY: {intersection_id}/{approach} phase={phase}")
 
     def start(self):
@@ -75,6 +77,19 @@ class CloudOrchestrator:
         
         # Добавляем команды зелёной волны
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
+        
+        # Логируем зелёные волны в статистике
+        active_waves = [c for c in green_wave_commands if c.get("action") == "GREEN_WAVE_SYNC"]
+        if active_waves:
+            for wave in active_waves:
+                corridor = wave.get("corridor", [])
+                gw_phase = wave.get("phase", "UNKNOWN")
+                if corridor:
+                    traffic_stats.start_green_wave(corridor, gw_phase)
+        else:
+            # Если нет активных волн — завершаем
+            traffic_stats.end_green_wave()
+        
         commands.extend(green_wave_commands)
         
         # ===== EMERGENCY "ЗЕЛЁНЫЙ КОРИДОР" =====
@@ -120,6 +135,7 @@ class CloudOrchestrator:
             # Если таймер истёк — сбрасываем emergency
             if self._emergency_timer <= 0:
                 info("CloudOrchestrator", f"✅ Emergency completed on {self._emergency_intersection}")
+                traffic_stats.end_emergency()
                 self._emergency_active = False
                 self._emergency_intersection = None
                 self._emergency_approach = None

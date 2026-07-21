@@ -9,7 +9,7 @@ from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
-from backend.services.statistics import traffic_stats
+from backend.services.statistics import traffic_stats, CongestionSnapshot
 from backend.core.logger import debug, info, warning, error
 import time
 
@@ -252,27 +252,29 @@ class TrafficOrchestrator:
         
         # Если фаза изменилась - записываем статистику
         if prev_active_phase != active_phase:
-            traffic_stats.record_phase_change(inter_id, active_phase, active_approaches)
+            traffic_stats.record_phase_switch(inter_id)
         
-        # ШАГ 5.6: Записываем статистику для всех полос
+        # ШАГ 5.6: Записываем congestion snapshot для перекрёстка
+        lane_congestions = {}
+        total_cars = 0
+        active_lanes_count = 0
+        
         for cam in batch.cameras:
-            direction = cam.camera_id.split("_approach_")[-1] if "_approach_" in cam.camera_id else cam.camera_id
-            direction = f"approach_{direction}" if not direction.startswith("approach_") else direction
-            is_active = direction in active_approaches
-            
             for lane in cam.lanes:
                 norm_lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
                 lane_state = traffic_network.lane_pool.get(norm_lane_id, {})
                 congestion = lane_state.get("congestion_index", 0.0)
-                
-                traffic_stats.record_lane_data(
-                    intersection_id=inter_id,
-                    lane_id=norm_lane_id,
-                    car_count=lane.car_count,
-                    avg_speed=lane.avg_speed,
-                    congestion=congestion,
-                    is_green=is_active,
-                )
+                lane_congestions[norm_lane_id] = congestion
+                total_cars += lane.car_count
+                active_lanes_count += 1
+        
+        traffic_stats.record_congestion_snapshot(
+            intersection_id=inter_id,
+            lane_congestions=lane_congestions,
+            total_cars=total_cars,
+            active_lanes=active_lanes_count,
+            phase=active_phase or "UNKNOWN",
+        )
         
         # ШАГ 6: Формируем ответы и одно UI-сообщение
         responses = []
