@@ -432,15 +432,22 @@ class TrafficUIFactory:
             await asyncio.sleep(1.0)
             try:
                 self._flush_updates()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[DEBUG _flush_loop] ERROR: {e}")
+                traceback.print_exc()
 
     def _flush_updates(self):
         if not self.page:
+            print("[DEBUG _flush_updates] no page")
             return
+
+        print(
+            f"[DEBUG _flush_updates] pending_cloud={len(self._pending_cloud_states)} pending_lane={len(self._pending_lane_updates)} last_stats={'YES' if self._last_statistics else 'NO'}")
+
         changed = False
 
         for data in self._pending_cloud_states:
+            print(f"[DEBUG] cloud_state keys: {list(data.keys())}")
             self._apply_cloud_state(data)
             self.map.update_cloud_state(data)
             changed = True
@@ -481,27 +488,44 @@ class TrafficUIFactory:
         if changed:
             self.map.refresh()
             self.apply_filter()
+        
+        # Всегда обновляем страницу (статистика могла пропустить update)
+        if self.page:
+            self.page.update()
 
     def _update_statistics(self):
         """Обновить аналитику в UI.
-        
-        Данные берутся из self._last_statistics, который наполняется 
-        через WebSocket из cloud_orchestrator (бэкенд).
+
+        Приоритет: WebSocket-статистика (актуальна при активном окне).
+        Fallback: прямой импорт traffic_stats (работает даже в фоне,
+        т.к. бэкенд и UI в одном процессе при разработке).
         """
         stats = self._last_statistics
+
+        # Fallback: если WebSocket не прислал статистику (окно в фоне / Flet заморозил loop),
+        # читаем напрямую из бэкенда. traffic_stats — синглтон, наполняется оркестратором.
         if not stats:
+            try:
+                from backend.services.statistics import traffic_stats
+                stats = traffic_stats.get_full_statistics()
+            except Exception:
+                stats = {}
+
+        if not stats:
+            if self.page:
+                self.page.update()
             return
-        
+
         summary = stats.get("network_summary", {})
-        
+
         # --- Header метрики ---
         self.uptime_text.value = f"⏱ Uptime: {summary.get('uptime_display', '-')}"
-        self.network_load_text.value = f"📊 Загрузка сети: {summary.get('network_avg_congestion', 0)*100:.0f}%"
+        self.network_load_text.value = f"📊 Загрузка сети: {summary.get('network_avg_congestion', 0) * 100:.0f}%"
         self.total_switches_text.value = f"🔄 Переключений фаз: {summary.get('total_phase_switches', 0)}"
         self.emergency_count_text.value = f"🚨 Emergency: {summary.get('total_emergency_events', 0)}"
         self.anomaly_count_text.value = f"⚠️ Аномалий: {summary.get('intersections_with_anomalies', 0)}"
         self.gw_count_text.value = f"🟢 Зелёных волн: {summary.get('total_green_wave_events', 0)}"
-        
+
         # --- Рейтинг загруженности ---
         self.ranking_container.controls.clear()
         ranking = stats.get("congestion_ranking", [])
@@ -510,10 +534,10 @@ class TrafficUIFactory:
             color = "red" if congestion_pct > 70 else ("orange" if congestion_pct > 40 else "green")
             trend_symbol = r.get("trend", "")
             trend_color = "red" if "rising" in trend_symbol else "green"
-            
+
             rank_card = ft.Container(
                 content=ft.Row([
-                    ft.Text(f"#{i+1}", size=14, weight=ft.FontWeight.BOLD, color="grey"),
+                    ft.Text(f"#{i + 1}", size=14, weight=ft.FontWeight.BOLD, color="grey"),
                     ft.Text(f"🛑 {r['intersection_id']}", size=14, weight=ft.FontWeight.BOLD, expand=True),
                     ft.Text(f"{congestion_pct:.0f}%", size=14, weight=ft.FontWeight.BOLD, color=color),
                     ft.ProgressBar(value=r["avg_congestion"], width=100, color=color, bgcolor="#333"),
@@ -524,10 +548,10 @@ class TrafficUIFactory:
                 bgcolor="#2a2a3e", padding=8, border_radius=6,
             )
             self.ranking_container.controls.append(rank_card)
-        
-        # --- График загрузки (гистограмма по рейтингу) ---
+
+        # --- График загрузки ---
         self._draw_congestion_chart(stats)
-        
+
         # --- Тренды ---
         self.trend_container.controls.clear()
         for r in ranking:
@@ -542,7 +566,7 @@ class TrafficUIFactory:
                 bgcolor="#2a2a3e", padding=6, border_radius=4,
             )
             self.trend_container.controls.append(trend_card)
-        
+
         # --- Emergency лог ---
         self.emergency_log_container.controls.clear()
         for ev in stats.get("emergency_log", []):
@@ -552,7 +576,8 @@ class TrafficUIFactory:
                 content=ft.Row([
                     ft.Text(f"🚨", size=16),
                     ft.Text(f"[{ev_time}]", size=11, color="grey"),
-                    ft.Text(f"{ev['intersection_id']}/{ev['approach']}", size=13, weight=ft.FontWeight.BOLD, expand=True),
+                    ft.Text(f"{ev['intersection_id']}/{ev['approach']}", size=13, weight=ft.FontWeight.BOLD,
+                            expand=True),
                     ft.Text(f"phase: {ev['phase']}", size=12, color="yellow"),
                     ft.Text(f"{ev['duration']:.1f}s", size=12, color="red"),
                     ft.Text(cascade_str, size=11, color="orange"),
@@ -564,7 +589,7 @@ class TrafficUIFactory:
             self.emergency_log_container.controls.append(
                 ft.Text("Нет emergency-событий", size=12, color="grey", italic=True)
             )
-        
+
         # --- Green Wave лог ---
         self.green_wave_log_container.controls.clear()
         for gw in stats.get("green_wave_log", []):
@@ -585,7 +610,7 @@ class TrafficUIFactory:
             self.green_wave_log_container.controls.append(
                 ft.Text("Нет зелёных волн", size=12, color="grey", italic=True)
             )
-        
+
         # --- Аномалии ---
         self.anomaly_log_container.controls.clear()
         for an in stats.get("anomaly_log", []):
@@ -607,69 +632,44 @@ class TrafficUIFactory:
             self.anomaly_log_container.controls.append(
                 ft.Text("Нет аномалий", size=12, color="grey", italic=True)
             )
-        
+
         if self.page:
             self.page.update()
-    
+
     def _draw_congestion_chart(self, stats: dict):
-        """Нарисовать гистограмму congestion по рейтингу (данные из WebSocket)"""
+        """Гистограмма congestion через обычные ProgressBar (совместимо с любой версией Flet)."""
         ranking = stats.get("congestion_ranking", [])
+
+        chart_controls = []
+        chart_controls.append(
+            ft.Text("📈 Congestion time series (5 мин)", size=16, weight=ft.FontWeight.BOLD)
+        )
+
         if not ranking:
-            self.congestion_canvas.shapes = [
-                cv.Circle(x=340, y=100, radius=50,
-                          paint=ft.Paint(color="#333", style=ft.PaintingStyle.FILL)),
-            ]
+            chart_controls.append(ft.Text("Нет данных", color="grey", italic=True))
+            self.congestion_canvas_container.content = ft.Column(chart_controls, spacing=8)
             return
-        
-        canvas_w = 680
-        canvas_h = 200
-        margin_l = 60
-        margin_r = 20
-        margin_t = 20
-        margin_b = 40
-        plot_w = canvas_w - margin_l - margin_r
-        plot_h = canvas_h - margin_t - margin_b
-        
-        shapes = [
-            cv.Circle(x=canvas_w // 2, y=canvas_h // 2, radius=1000,
-                      paint=ft.Paint(color="#1a1a2e", style=ft.PaintingStyle.FILL)),
-        ]
-        
-        # Горизонтальные линии сетки
-        for i in range(5):
-            y = margin_t + plot_h * (1 - i / 4)
-            shapes.append(cv.Line(
-                margin_l, y, canvas_w - margin_r, y,
-                paint=ft.Paint(color="#2a2a3e", stroke_width=1, style=ft.PaintingStyle.STROKE),
-            ))
-            shapes.append(cv.Text(
-                x=5, y=y - 6, text=f"{i*25}%",
-                paint=ft.Paint(color="#666", size=9),
-            ))
-        
-        # Бары для топ-8 перекрёстков
+
+        # Топ-8 перекрёстков
         top = ranking[:8]
-        bar_w = plot_w / len(top) - 4
-        for idx, r in enumerate(top):
-            val = r["avg_congestion"]
-            x = margin_l + (idx / len(top)) * plot_w + 2
-            h = val * plot_h
-            y = margin_t + plot_h - h
-            congestion_pct = val * 100
-            color = "#ff4444" if congestion_pct > 70 else ("#ffaa00" if congestion_pct > 40 else "#44ff44")
-            
-            shapes.append(cv.Rectangle(
-                x=x, y=y, width=bar_w, height=h,
-                paint=ft.Paint(color=color, style=ft.PaintingStyle.FILL),
-            ))
-            # Название под баром
+        for r in top:
+            congestion_pct = r["avg_congestion"] * 100
+            color = "red" if congestion_pct > 70 else ("orange" if congestion_pct > 40 else "green")
             short_name = r['intersection_id'].replace("intersection_", "i")
-            shapes.append(cv.Text(
-                x=x, y=canvas_h - 14, text=short_name,
-                paint=ft.Paint(color="#aaa", size=8),
-            ))
-    
-        self.congestion_canvas.shapes = shapes
+
+            bar_row = ft.Row([
+                ft.Text(short_name, size=11, width=60, color="#aaa"),
+                ft.ProgressBar(
+                    value=r["avg_congestion"],
+                    width=400,
+                    color=color,
+                    bgcolor="#333",
+                ),
+                ft.Text(f"{congestion_pct:.0f}%", size=11, color=color, width=50),
+            ], spacing=8)
+            chart_controls.append(bar_row)
+
+        self.congestion_canvas_container.content = ft.Column(chart_controls, spacing=6)
 
     async def connect_to_backend(self):
         uri = "ws://127.0.0.1:8050/ws/monitor"
@@ -716,6 +716,10 @@ class TrafficUIFactory:
                 await asyncio.sleep(2)
 
     def _apply_cloud_state(self, data: dict):
+        print(f"[DEBUG _apply_cloud_state] has statistics: {'statistics' in data}")
+        if "statistics" in data:
+            print(f"[DEBUG] statistics type: {type(data['statistics'])}, keys: {list(data['statistics'].keys()) if isinstance(data['statistics'], dict) else 'N/A'}")
+            self._last_statistics = data["statistics"]
         self.total_cars_text.value = f"Машин в сети: {data.get('total_cars_on_network', 0)}"
         commands = data.get("cascade_commands", [])
         self.cascade_text.value = f"Каскадных команд: {len(commands)}"
