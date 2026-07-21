@@ -75,6 +75,9 @@ public class WaypointNavigator : MonoBehaviour
     // Стоп-триггер светофора
     private bool isOnIntersection = false;
     
+    // Коллайдер перекрёстка — машина на перекрёстке физически не тормозит
+    private bool isOnIntersectionZone = false;
+    
     // Повороты
     private bool isTurning = false;
     [Header("Параметры поворотов")]
@@ -270,6 +273,13 @@ public class WaypointNavigator : MonoBehaviour
             }
         }
 
+        // Если машина на коллайдере перекрёстка — не даём targetSpeed упасть до 0,
+        // иначе она встанет колом и создаст затор
+        if (isOnIntersectionZone && targetSpeed < originalSpeed * 0.3f)
+        {
+            targetSpeed = originalSpeed * 0.3f;
+        }
+
         // Плавное изменение скорости
         if (targetSpeed == 0f)
         {
@@ -279,9 +289,6 @@ public class WaypointNavigator : MonoBehaviour
         {
             speed = Mathf.Lerp(speed, targetSpeed, speedSmoothing * Time.deltaTime);
         }
-
-        // Если скорость слишком низкая - не двигаемся
-        //if (speed < 0.05f) return;
 
         // Плавный поворот
         if (moveDirection != Vector3.zero)
@@ -540,12 +547,24 @@ public class WaypointNavigator : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        // Коллайдер перекрёстка — машина въехала на перекрёсток
+        if (other.CompareTag("IntersectionZone"))
+        {
+            isOnIntersectionZone = true;
+        }
+        
         // При входе в зону стоп-линии ничего не делаем
         // ПДД проверяется в Update() до входа в зону
     }
 
     void OnTriggerExit(Collider other)
     {
+        if (other.CompareTag("IntersectionZone"))
+        {
+            // Машина покинула коллайдер перекрёстка
+            isOnIntersectionZone = false;
+        }
+        
         if (other.CompareTag("StopTrigger"))
         {
             isStoppedByLight = false;
