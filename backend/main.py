@@ -1,7 +1,7 @@
 # backend/main.py
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from backend.models.traffic import IntersectionUpdateDTO, BatchTelemetryDTO, BatchResponseDTO, SingleResponseDTO
+from backend.models.traffic import BatchTelemetryDTO, BatchResponseDTO, SingleResponseDTO
 from backend.services.orchestrator import TrafficOrchestrator
 from backend.services.cloud_orchestrator import CloudOrchestrator
 
@@ -57,17 +57,6 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.post("/api/v1/telemetry")
-async def receive_telemetry(update: IntersectionUpdateDTO):
-    result = await orchestrator.handle_telemetry(update)
-    return {
-        "status": "processed",
-        "target_phase": result["target_phase"],
-        "green_duration": result.get("green_duration", 0.0),
-        "cascade_applied": result["cascade_applied"],
-    }
-
-
 @app.post("/api/v1/telemetry/batch")
 async def receive_batch_telemetry(batch: BatchTelemetryDTO):
     """Batch-эндпоинт: принимает телеметрию от ВСЕХ камер перекрёстка в одном запросе.
@@ -77,22 +66,8 @@ async def receive_batch_telemetry(batch: BatchTelemetryDTO):
     """
     responses, emergency_active, emergency_phase = await orchestrator.handle_batch_telemetry(batch)
     
-    # Добавляем emergency_override флаг в каждый ответ где active
-    for resp in responses:
-        if emergency_active and emergency_phase:
-            # Определяем, относится ли камера к emergency фазе
-            from backend.services.graph_manager import traffic_network
-            # direction = approach (извлекаем из camera_id как в orchestrator.py)
-            direction = resp.camera_id.split("_approach_")[-1] if "_approach_" in resp.camera_id else resp.camera_id
-            direction = f"approach_{direction}" if not direction.startswith("approach_") else direction
-            approaches = None
-            phases_config = traffic_network.intersection_phases.get(batch.intersection_id, {})
-            for pn, pd in phases_config.items():
-                if pn == emergency_phase:
-                    approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
-                    break
-            if approaches and direction in approaches:
-                resp.emergency_override = True
+    # Применяем emergency_override через orchestrator (единый источник логики)
+    responses = orchestrator.apply_emergency_override(responses, batch.intersection_id, emergency_phase)
     
     return BatchResponseDTO(
         responses=responses,

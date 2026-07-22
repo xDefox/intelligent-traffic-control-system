@@ -18,9 +18,9 @@
 - [x] Обновить `graph_manager.py` — заменить `_resolve_intersection_and_approach` на `parse_lane_id`
 
 ## Этап 3: Рефакторинг orchestrator.py (SRP)
-- [] Разбить `handle_batch_telemetry` на методы (_register_cameras, _update_lane_pool, _decide_phase, _calculate_green_duration, _build_responses, _record_statistics)
-- [] Вынести emergency-логику из main.py в orchestrator (apply_emergency_override)
-- [] Удалить `handle_telemetry()` (per-lane endpoint)
+- [x] Разбить `handle_batch_telemetry` на методы (_register_cameras, _update_lane_pool, _decide_phase, _calculate_green_duration, _build_responses, _record_statistics)
+- [x] Вынести emergency-логику из main.py в orchestrator (apply_emergency_override)
+- [x] Удалить `handle_telemetry()` (per-lane endpoint)
 
 ## Этап 4: Рефакторинг cloud_orchestrator.py (SRP)
 - [] Разбить `_cascade_tick` на методы (_process_green_wave, _process_emergency, _compute_intersection_summary, _record_statistics, _broadcast_state)
