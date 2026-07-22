@@ -28,8 +28,8 @@
 ## Этап 5: Рефакторинг admin_panel.py
 - [x] Убрать debug print → logger (debug())
 - [x] Использовать `denormalize_lane_id` из lane_utils
-- [ ] Разбить на модули: ui/map.py, ui/panels.py (оставлено на будущую итерацию)
-- [ ] Исправить хардкод индексов в TrafficMap.refresh() (оставлено на будущую итерацию)
+- [x] Разбить на модули: ui/map.py, ui/panels.py
+- [ ] Исправить хардкод индексов в TrafficMap.refresh()
 
 ## Этап 6: Unity — чистка и дедупликация
 - [ ] Переименовать `LightController.cs` → `IntersectionManager.cs`
