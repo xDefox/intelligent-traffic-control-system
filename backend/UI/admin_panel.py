@@ -5,7 +5,6 @@ import json
 import time
 import websockets
 import traceback
-from typing import Dict
 
 
 # ============ КОНФИГ ГРАФА ============

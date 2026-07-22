@@ -23,7 +23,7 @@
 - [x] Удалить `handle_telemetry()` (per-lane endpoint)
 
 ## Этап 4: Рефакторинг cloud_orchestrator.py (SRP)
-- [] Разбить `_cascade_tick` на методы (_process_green_wave, _process_emergency, _compute_intersection_summary, _record_statistics, _broadcast_state)
+- [x] Разбить `_cascade_tick` на методы (_process_green_wave, _process_emergency, _compute_intersection_summary, _record_statistics, _broadcast_state)
 
 ## Этап 5: Рефакторинг admin_panel.py
 - [ ] Убрать debug print → logger (debug())
