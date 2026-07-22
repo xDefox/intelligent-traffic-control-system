@@ -5,6 +5,8 @@ import json
 import time
 import websockets
 import traceback
+from backend.core.logger import debug, info, warning, error
+from backend.core.lane_utils import denormalize_lane_id
 
 
 # ============ КОНФИГ ГРАФА ============
@@ -432,21 +434,20 @@ class TrafficUIFactory:
             try:
                 self._flush_updates()
             except Exception as e:
-                print(f"[DEBUG _flush_loop] ERROR: {e}")
+                error("AdminPanel", f"_flush_loop ERROR: {e}")
                 traceback.print_exc()
 
     def _flush_updates(self):
         if not self.page:
-            print("[DEBUG _flush_updates] no page")
+            debug("AdminPanel", "_flush_updates: no page")
             return
 
-        print(
-            f"[DEBUG _flush_updates] pending_cloud={len(self._pending_cloud_states)} pending_lane={len(self._pending_lane_updates)} last_stats={'YES' if self._last_statistics else 'NO'}")
+        debug("AdminPanel", f"_flush_updates: pending_cloud={len(self._pending_cloud_states)} pending_lane={len(self._pending_lane_updates)} last_stats={'YES' if self._last_statistics else 'NO'}")
 
         changed = False
 
         for data in self._pending_cloud_states:
-            print(f"[DEBUG] cloud_state keys: {list(data.keys())}")
+            debug("AdminPanel", f"cloud_state keys: {list(data.keys())}")
             self._apply_cloud_state(data)
             self.map.update_cloud_state(data)
             changed = True
@@ -715,9 +716,10 @@ class TrafficUIFactory:
                 await asyncio.sleep(2)
 
     def _apply_cloud_state(self, data: dict):
-        print(f"[DEBUG _apply_cloud_state] has statistics: {'statistics' in data}")
+        debug("AdminPanel", f"_apply_cloud_state: has statistics: {'statistics' in data}")
         if "statistics" in data:
-            print(f"[DEBUG] statistics type: {type(data['statistics'])}, keys: {list(data['statistics'].keys()) if isinstance(data['statistics'], dict) else 'N/A'}")
+            stats_val = data["statistics"]
+            debug("AdminPanel", f"statistics type: {type(stats_val)}, keys: {list(stats_val.keys()) if isinstance(stats_val, dict) else 'N/A'}")
             self._last_statistics = data["statistics"]
         self.total_cars_text.value = f"Машин в сети: {data.get('total_cars_on_network', 0)}"
         commands = data.get("cascade_commands", [])
@@ -778,7 +780,7 @@ class TrafficUIFactory:
         for lane in lanes:
             # Нормализуем lane_id: убираем префикс "lane_" для отображения
             raw_lane_id = lane["lane_id"]
-            display_lane_id = raw_lane_id.replace("lane_", "") if raw_lane_id.startswith("lane_") else raw_lane_id
+            display_lane_id = denormalize_lane_id(raw_lane_id)
             global_key = f"{inter_id}_{raw_lane_id}"  # Для кэша используем полный ID
 
             car_count = lane.get("car_count", 0)

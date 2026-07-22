@@ -26,8 +26,8 @@
 - [x] Разбить `_cascade_tick` на методы (_process_green_wave, _process_emergency, _compute_intersection_summary, _record_statistics, _broadcast_state)
 
 ## Этап 5: Рефакторинг admin_panel.py
-- [ ] Убрать debug print → logger (debug())
-- [ ] Использовать `denormalize_lane_id` из lane_utils
+- [x] Убрать debug print → logger (debug())
+- [x] Использовать `denormalize_lane_id` из lane_utils
 - [ ] Разбить на модули: ui/map.py, ui/panels.py (оставлено на будущую итерацию)
 - [ ] Исправить хардкод индексов в TrafficMap.refresh() (оставлено на будущую итерацию)
 
