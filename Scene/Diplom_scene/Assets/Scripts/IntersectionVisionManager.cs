@@ -83,17 +83,17 @@ public class IntersectionVisionManager : MonoBehaviour
             intersectionId = ExtractIntersectionIdFromName(gameObject.name);
         }
         
-        Debug.Log($"[{gameObject.name}] 🚦 IntersectionVisionManager запущен: ID={intersectionId}, Камер X={xAxisCameras.Count}, Z={zAxisCameras.Count}, Всего={xAxisCameras.Count + zAxisCameras.Count}");
+        Logger.LogInfo("IntersectionVisionManager", $"🚦 Started: ID={intersectionId}, X cameras={xAxisCameras.Count}, Z cameras={zAxisCameras.Count}, Total={xAxisCameras.Count + zAxisCameras.Count}");
         
         if (xAxisCameras.Count == 0 && zAxisCameras.Count == 0)
         {
-            Debug.LogError($"[{gameObject.name}] ❌ ОШИБКА: Не назначены камеры! X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Хотя бы один список камер должен быть заполнен!");
+            Logger.LogError("IntersectionVisionManager", $"❌ ОШИБКА: Не назначены камеры! X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Хотя бы один список камер должен быть заполнен!");
             return; // Не запускаем без камер вообще
         }
         
         if (xAxisCameras.Count == 0 || zAxisCameras.Count == 0)
         {
-            Debug.Log($"[{gameObject.name}] ℹ️ Режим одного направления: X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Система будет работать с доступными камерами.");
+            Logger.LogInfo("IntersectionVisionManager", $"ℹ️ Режим одного направления: X={xAxisCameras.Count}, Z={zAxisCameras.Count}. Система будет работать с доступными камерами.");
         }
         
         if (intersectionController == null)
@@ -103,7 +103,7 @@ public class IntersectionVisionManager : MonoBehaviour
 
         if (sharedYoloModel == null) 
         {
-            Debug.LogWarning($"[{gameObject.name}] ⚠️ YOLO модель не назначена!");
+            Logger.LogWarning("IntersectionVisionManager", $"⚠️ YOLO модель не назначена!");
             return;
         }
 
@@ -117,7 +117,7 @@ public class IntersectionVisionManager : MonoBehaviour
         allCameras.AddRange(zAxisCameras);
         cameraResults = new int[allCameras.Count];
 
-        Debug.Log($"[{gameObject.name}] ✅ Запуск inference loop: {allCameras.Count} камер, ID={intersectionId}");
+        Logger.LogInfo("IntersectionVisionManager", $"✅ Запуск inference loop: {allCameras.Count} камер, ID={intersectionId}");
         StartCoroutine(CentralizedInferenceLoop());
     }
 
@@ -170,7 +170,7 @@ public class IntersectionVisionManager : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[{intersectionId}] Inference error camera {i}: {ex.Message}");
+                    Logger.LogError("IntersectionVisionManager", $"Inference error camera {i}: {ex.Message}");
                     cameraResults[i] = 0;
                 }
             }
@@ -182,7 +182,7 @@ public class IntersectionVisionManager : MonoBehaviour
             {
                 string axis = i < xAxisCameras.Count ? "X" : "Z";
                 int camIndex = i < xAxisCameras.Count ? i : i - xAxisCameras.Count;
-                Debug.Log($"[{intersectionId}] Камера {i} ({axis}-{camIndex}): {cameraResults[i]} машин");
+                Logger.LogDebug("IntersectionVisionManager", $"Camera {i} ({axis}-{camIndex}): {cameraResults[i]} cars");
             }
         }
         
@@ -259,11 +259,11 @@ public class IntersectionVisionManager : MonoBehaviour
             
             if (allCameras[i].emergencyDetected)
             {
-                Debug.Log($"[{intersectionId}] 🚨 Спецтранспорт на камере {i} ({axisType}-ось) → {laneId}, approach={emergencyApproach}");
+                Logger.LogInfo("IntersectionVisionManager", $"🚨 Emergency vehicle on camera {i} ({axisType}-axis) → {laneId}, approach={emergencyApproach}");
             }
             else
             {
-                Debug.Log($"[{intersectionId}] Камера {i} ({axisType}-ось) → {laneId}");
+                Logger.LogDebug("IntersectionVisionManager", $"Camera {i} ({axisType}-axis) → {laneId}");
             }
         }
 
@@ -272,7 +272,7 @@ public class IntersectionVisionManager : MonoBehaviour
         string json = JsonUtility.ToJson(batch);
 
         if (enableDebugLogs)
-            Debug.Log($"[{intersectionId}] Batch telemetry: {json}");
+            Logger.LogDebug("IntersectionVisionManager", $"Batch telemetry: {json}");
 
         using (UnityWebRequest request = new UnityWebRequest(batchTelemetryUrl, "POST"))
         {
@@ -294,7 +294,7 @@ public class IntersectionVisionManager : MonoBehaviour
 
                 string jsonResponse = request.downloadHandler.text;
                 if (enableDebugLogs)
-                    Debug.Log($"[{intersectionId}] Batch response: {jsonResponse}");
+                    Logger.LogDebug("IntersectionVisionManager", $"Batch response: {jsonResponse}");
 
                 try
                 {
@@ -307,8 +307,8 @@ public class IntersectionVisionManager : MonoBehaviour
                         
                         foreach (var resp in responseData.responses)
                         {
-                            if (enableDebugLogs)
-                                Debug.Log($"[{intersectionId}] Command {resp.camera_id}: {resp.target_phase} ({resp.green_duration}s, emergency={resp.emergency_override})");
+                        if (enableDebugLogs)
+                                Logger.LogDebug("IntersectionVisionManager", $"Command {resp.camera_id}: {resp.target_phase} ({resp.green_duration}s, emergency={resp.emergency_override})");
 
                             intersectionController.ReceiveCommandForLane(
                                 resp.camera_id,
@@ -326,7 +326,7 @@ public class IntersectionVisionManager : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[{intersectionId}] Batch parse error: {ex.Message}\nResponse: {jsonResponse}");
+                    Logger.LogError("IntersectionVisionManager", $"Batch parse error: {ex.Message}\nResponse: {jsonResponse}");
                 }
             }
             else
@@ -336,7 +336,7 @@ public class IntersectionVisionManager : MonoBehaviour
                 {
                     intersectionController.OnBackendResponseFailed();
                 }
-                Debug.LogError($"[{intersectionId}] Batch request failed: {request.error}");
+                Logger.LogError("IntersectionVisionManager", $"Batch request failed: {request.error}");
             }
         }
     }

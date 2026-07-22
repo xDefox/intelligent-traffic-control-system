@@ -525,6 +525,9 @@ MonoBehaviour:
   - {fileID: 235692049}
   - {fileID: 0}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &44849712
 GameObject:
@@ -718,6 +721,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1072336745}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &62657984
 MonoBehaviour:
@@ -771,6 +777,9 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 1888690438}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &67039561
 Transform:
@@ -1832,6 +1841,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1542885693}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &226519306
 GameObject:
@@ -1982,6 +1994,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1377417175}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &259477596
 GameObject:
@@ -2179,6 +2194,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &262609371
 Transform:
@@ -2387,6 +2405,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &282847488
 MonoBehaviour:
@@ -2406,7 +2427,7 @@ MonoBehaviour:
   targetCanvas: {fileID: 1598132764}
   maxVisibleBoxes: 15
   emergencyOverlapRadius: 2.5
-  debugLogClassIds: 1
+  debugLogClassIds: 0
   roiPolygon:
   - {x: 0.53, y: -0.07}
   - {x: 0.79, y: -0.06}
@@ -2576,6 +2597,7 @@ MonoBehaviour:
   xGreenDuration: 8
   enableDebugLogs: 0
   emergencyBlinkInterval: 0.3
+  fallbackRequestThreshold: 5
 --- !u!1 &302001183
 GameObject:
   m_ObjectHideFlags: 0
@@ -2633,7 +2655,7 @@ Transform:
   m_GameObject: {fileID: 309616277}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 14.13, y: -0.09, z: 36.916092}
+  m_LocalPosition: {x: 14.13, y: -0.09, z: 47}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2829,6 +2851,9 @@ MonoBehaviour:
   - {fileID: 2084920048}
   - {fileID: 1210784704}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &358247955
 GameObject:
@@ -2839,9 +2864,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 358247956}
+  - component: {fileID: 358247957}
   m_Layer: 0
   m_Name: 'Intersection_3 '
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2865,6 +2891,74 @@ Transform:
   - {fileID: 1580957867}
   - {fileID: 918310057}
   m_Father: {fileID: 4408005647054467093}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &358247957
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 358247955}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5, y: 2, z: 5}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &360488754
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 360488756}
+  - component: {fileID: 360488755}
+  m_Layer: 0
+  m_Name: 'TrafficConstraintsManager '
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &360488755
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 360488754}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45432ea3d172db145b084562ca0cb97e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TrafficConstraintsManager
+  updateInterval: 2
+  congestionThreshold: 0.7
+  backendUrl: http://127.0.0.1:8050
+--- !u!4 &360488756
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 360488754}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 25.11782, y: 0.15, z: 8.52103}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &375135369 stripped
 Transform:
@@ -3490,6 +3584,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &449025497
 Transform:
@@ -3837,6 +3934,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1031553661}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &494243403
 GameObject:
@@ -3996,6 +4096,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1135720314}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &532706136
 GameObject:
@@ -4079,6 +4182,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2066302606}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &557775509
 GameObject:
@@ -4165,6 +4271,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2425918857525642081}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &563523230
 Transform:
@@ -4737,6 +4846,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &601316550
 Transform:
@@ -5392,6 +5504,7 @@ MonoBehaviour:
   xGreenDuration: 8
   enableDebugLogs: 0
   emergencyBlinkInterval: 0.3
+  fallbackRequestThreshold: 5
 --- !u!1 &715682552
 GameObject:
   m_ObjectHideFlags: 0
@@ -5441,6 +5554,9 @@ MonoBehaviour:
   - {fileID: 449025496}
   - {fileID: 1143216491}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &723089708
 GameObject:
@@ -5508,6 +5624,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &736192543
 Transform:
@@ -5603,6 +5722,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1332875704}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &747045232
 GameObject:
@@ -5790,6 +5912,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1544790762}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &748724242
 GameObject:
@@ -6072,6 +6197,8 @@ MonoBehaviour:
   emergencySpawnKey: 101
   policeCarPrefab: {fileID: 1646981259178978, guid: 6fc582442d61262498e9581bfa02edc8, type: 3}
   emergencyVehicleTag: EmergencyVehicle
+  trafficConstraints: {fileID: 360488755}
+  spawnCongestionThreshold: 0.7
 --- !u!4 &787922381
 Transform:
   m_ObjectHideFlags: 0
@@ -6343,6 +6470,9 @@ MonoBehaviour:
   - {fileID: 1072336745}
   - {fileID: 1843930201}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &830539667
 Transform:
@@ -6441,6 +6571,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1821460496}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &874493440
 GameObject:
@@ -6599,6 +6732,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &912229706
 GameObject:
@@ -6717,6 +6853,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 449025496}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &941096791
 GameObject:
@@ -7165,6 +7304,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1135720314}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1000480795
 GameObject:
@@ -7412,6 +7554,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1910606052}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1048309977
 GameObject:
@@ -7428,7 +7573,7 @@ GameObject:
   - component: {fileID: 1048309979}
   m_Layer: 0
   m_Name: Defualt_Road
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -7630,6 +7775,7 @@ MonoBehaviour:
   xGreenDuration: 8
   enableDebugLogs: 0
   emergencyBlinkInterval: 0.3
+  fallbackRequestThreshold: 5
 --- !u!1 &1066642583
 GameObject:
   m_ObjectHideFlags: 0
@@ -7743,6 +7889,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1478761901}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1100478241
 GameObject:
@@ -8034,8 +8183,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours:
-  - {fileID: 2560340142639412647}
+  - {fileID: 3347688905744289767}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1139132854 stripped
 Transform:
@@ -8082,6 +8234,7 @@ MonoBehaviour:
   xGreenDuration: 8
   enableDebugLogs: 0
   emergencyBlinkInterval: 0.3
+  fallbackRequestThreshold: 5
 --- !u!4 &1141383410
 Transform:
   m_ObjectHideFlags: 0
@@ -8114,7 +8267,7 @@ MonoBehaviour:
   autoGenerateIdFromName: 1
   sharedYoloModel: {fileID: 5022602860645237092, guid: f39baacfb47610346939e79841d158d8, type: 3}
   globalDetectionInterval: 0.2
-  enableDebugLogs: 1
+  enableDebugLogs: 0
   xAxisCameras:
   - {fileID: 282847488}
   zAxisCameras:
@@ -8167,6 +8320,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2101479904}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1150320236
 GameObject:
@@ -8470,6 +8626,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1332643140}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1156593767
 GameObject:
@@ -9068,6 +9227,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1210784702
 GameObject:
@@ -9116,6 +9278,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1821460496}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1229370196
 GameObject:
@@ -9505,6 +9670,9 @@ MonoBehaviour:
   - {fileID: 60166129}
   - {fileID: 528381296}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1313388675
 GameObject:
@@ -9731,6 +9899,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 601316549}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1332875703
 GameObject:
@@ -9764,6 +9935,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3347688905119062691}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1332875705
 Transform:
@@ -10105,7 +10279,7 @@ GameObject:
   - component: {fileID: 1374785484}
   m_Layer: 0
   m_Name: Defualt_Road
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -10311,6 +10485,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1384145790
 GameObject:
@@ -10477,6 +10654,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1072336745}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1427356897
 GameObject:
@@ -10907,6 +11087,9 @@ MonoBehaviour:
   - {fileID: 982646038}
   - {fileID: 1426182600}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1471401797
 GameObject:
@@ -11064,6 +11247,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1332643140}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1478761900
 GameObject:
@@ -11096,6 +11282,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1478761902
 Transform:
@@ -11300,6 +11489,9 @@ MonoBehaviour:
   - {fileID: 748236353}
   - {fileID: 1476067158}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1542899022
 GameObject:
@@ -11400,6 +11592,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2140439040}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1544790763
 Transform:
@@ -11576,6 +11771,9 @@ MonoBehaviour:
   creepSpeed: 1.5
   creepPauseInterval: 0.8
   approachThreshold: 0.3
+  onIntersectionGracePeriod: 2
+  turnAngleThreshold: 30
+  queueDistanceThreshold: 3
   showDebugGizmos: 1
 --- !u!1 &1580957866
 GameObject:
@@ -12768,6 +12966,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 563523229}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1821460497
 Transform:
@@ -12794,9 +12995,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1822269745}
   - component: {fileID: 1822269746}
+  - component: {fileID: 1822269747}
   m_Layer: 0
   m_Name: Intersection
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -12841,7 +13043,31 @@ MonoBehaviour:
   creepSpeed: 1.5
   creepPauseInterval: 0.8
   approachThreshold: 0.3
+  onIntersectionGracePeriod: 2
+  turnAngleThreshold: 30
+  queueDistanceThreshold: 3
   showDebugGizmos: 1
+--- !u!65 &1822269747
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1822269744}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5, y: 2, z: 5}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1843930200
 GameObject:
   m_ObjectHideFlags: 0
@@ -12874,6 +13100,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1544790762}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1843930202
 Transform:
@@ -13224,6 +13453,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 494024382}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &1888690439
 Transform:
@@ -13289,6 +13521,9 @@ MonoBehaviour:
   - {fileID: 2058939683}
   - {fileID: 746344556}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1918061639
 GameObject:
@@ -13962,6 +14197,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1332875704}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1973611193
 GameObject:
@@ -14526,6 +14764,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2101479904}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &2061443333
 GameObject:
@@ -14645,6 +14886,9 @@ MonoBehaviour:
   - {fileID: 856752107}
   - {fileID: 922019535}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1001 &2075446483
 PrefabInstance:
@@ -14774,6 +15018,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 449025496}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1001 &2096002406
 PrefabInstance:
@@ -14908,6 +15155,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1206009350}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &2112499258
 GameObject:
@@ -15104,6 +15354,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 67039560}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1377175527420668
 GameObject:
@@ -15190,6 +15443,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2559163313595469911}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!23 &23127836615917160
 MeshRenderer:
@@ -15498,6 +15754,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 8303456577669833056}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &472342783724935101
 Transform:
@@ -15840,6 +16099,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 461753898806268636}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &607243333423314171
 GameObject:
@@ -15983,6 +16245,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 8915789164264178174}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &834295400663004959
 Transform:
@@ -16036,6 +16301,9 @@ MonoBehaviour:
   - {fileID: 1000697105526032917}
   - {fileID: 3047135917856441386}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &871743159194902596
 GameObject:
@@ -16083,6 +16351,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3259737134772376046}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &1000697105526032917
 MonoBehaviour:
@@ -16099,6 +16370,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3733430543969070507}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &1026531004695777311
 MonoBehaviour:
@@ -16115,6 +16389,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &1044689482048462799
 MonoBehaviour:
@@ -16566,6 +16843,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3989107144878751660}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &1484244799026827397
 MonoBehaviour:
@@ -16790,6 +17070,9 @@ MonoBehaviour:
   - {fileID: 1818590164563109358}
   - {fileID: 4509870488704740305}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &1818590164563109358
 MonoBehaviour:
@@ -16806,6 +17089,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2814769443269706320}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &1828537589198630863
 GameObject:
@@ -17031,6 +17317,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 8026788549369523717}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &2205348805124071350
 Transform:
@@ -17082,6 +17371,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 4542625606639467887}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!23 &2423303413239055309
 MeshRenderer:
@@ -17148,6 +17440,9 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 573250187056252002}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &2456968705432442997
 GameObject:
@@ -17197,9 +17492,10 @@ GameObject:
   m_Component:
   - component: {fileID: 4184194538531114224}
   - component: {fileID: 4184194538531114225}
+  - component: {fileID: 4184194538531114226}
   m_Layer: 0
   m_Name: Intersection2
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -17250,6 +17546,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &2560340142639412647
 MonoBehaviour:
@@ -17266,6 +17565,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 5583176302354854457}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &2584478820295929301
 Transform:
@@ -17297,6 +17599,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3989107144878751660}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &2599280202622397748
 GameObject:
@@ -17446,6 +17751,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 8026788549369523717}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &2800329000504885209
 GameObject:
@@ -17640,6 +17948,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2560340142639412647}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!33 &2939805201215505651
 MeshFilter:
@@ -17767,6 +18078,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3158566239203168916}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3049211102027974537
 GameObject:
@@ -17871,6 +18185,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 5744107142853980772}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &3229870120538271503
 Transform:
@@ -17906,6 +18223,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2814769443269706320}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3239229862307416110
 GameObject:
@@ -17936,9 +18256,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours:
-  - {fileID: 2559163313595469911}
   - {fileID: 3751131407059181327}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &3309491086787495199
 MonoBehaviour:
@@ -17955,6 +18277,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1026531004695777311}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &3314139145008629118
 Transform:
@@ -17986,6 +18311,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 1785755367575497938}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &3347688905744289767
 MonoBehaviour:
@@ -17999,8 +18327,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53e348c230fc5324aa8bea2ed4792e27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
-  neighbours: []
+  neighbours:
+  - {fileID: 6459485599204433346}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &3347688906265814088
 MonoBehaviour:
@@ -18016,6 +18348,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3365165214736739462
 GameObject:
@@ -18240,6 +18575,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 8915789164264178174}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!23 &3624144621348047103
 MeshRenderer:
@@ -18339,6 +18677,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3734512953602575802
 GameObject:
@@ -18435,6 +18776,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3158566239203168916}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3834258361434354923
 GameObject:
@@ -18512,6 +18856,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 2559163313595469911}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &3980745116867226512
 GameObject:
@@ -18545,6 +18892,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 7116611233827183941}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &4000281764185524879
 GameObject:
@@ -18555,13 +18905,57 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3372879917693756171}
+  - component: {fileID: 4000281764185524880}
+  - component: {fileID: 4000281764185524881}
   m_Layer: 0
   m_Name: Intersection_prefab 1
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!65 &4000281764185524880
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4000281764185524879}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5, y: 2, z: 5}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!65 &4000281764185524881
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4000281764185524879}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4024641681397593392
 GameObject:
   m_ObjectHideFlags: 0
@@ -18593,6 +18987,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3733430543969070507}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &4038905789849354484
 Transform:
@@ -18786,6 +19183,9 @@ MonoBehaviour:
   - {fileID: 2364790620649386228}
   - {fileID: 3231053915367743722}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &4184194538531114224
 Transform:
@@ -18819,7 +19219,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0877d43c9ffff04388401af3eaf89ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IntersectionRightOfWay
-  detectionRadius: 8
+  detectionRadius: 10.06
   rightSideAngleRange: 60
   minRightCarDistance: 2
   deadlockTimeout: 3
@@ -18827,7 +19227,31 @@ MonoBehaviour:
   creepSpeed: 1.5
   creepPauseInterval: 0.8
   approachThreshold: 0.3
+  onIntersectionGracePeriod: 2
+  turnAngleThreshold: 19.9
+  queueDistanceThreshold: 3
   showDebugGizmos: 1
+--- !u!65 &4184194538531114226
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2547917778420622708}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 4, y: 2, z: 4}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4193893152259526733
 GameObject:
   m_ObjectHideFlags: 0
@@ -18952,6 +19376,9 @@ MonoBehaviour:
   creepSpeed: 1.5
   creepPauseInterval: 0.8
   approachThreshold: 0.3
+  onIntersectionGracePeriod: 2
+  turnAngleThreshold: 30
+  queueDistanceThreshold: 3
   showDebugGizmos: 1
 --- !u!4 &4475916968360935173
 Transform:
@@ -19000,6 +19427,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 4542625606639467887}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &4542625606639467887
 MonoBehaviour:
@@ -19016,6 +19446,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 7116611233235994625}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &4579602029947626586
 GameObject:
@@ -19064,7 +19497,7 @@ GameObject:
   - component: {fileID: 5659291106574848056}
   m_Layer: 0
   m_Name: Defualt_Road
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -19227,6 +19660,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &4929879882873107574
 Transform:
@@ -19531,9 +19967,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours:
   - {fileID: 0}
-  - {fileID: 22708629984150871}
   - {fileID: 2798185183031464421}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &5626101271821838427
 Transform:
@@ -19628,6 +20066,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 7837116917558153291}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!20 &5791224345287140511
 Camera:
@@ -19710,6 +20151,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 931683007062961553}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &5895319315706700244
 GameObject:
@@ -19862,11 +20306,9 @@ GameObject:
   - component: {fileID: 4256732650388917737}
   - component: {fileID: 7908900853620947946}
   - component: {fileID: 8648164201837686740}
-  - component: {fileID: 8643609532786648977}
-  - component: {fileID: 6509401234980634563}
   m_Layer: 0
   m_Name: Defualt_Road
-  m_TagString: Untagged
+  m_TagString: IntersectionZone
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -20101,6 +20543,9 @@ MonoBehaviour:
   - {fileID: 1481530110894090924}
   - {fileID: 3605967339292704286}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &6477703891861858113
 GameObject:
@@ -20118,33 +20563,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!54 &6509401234980634563
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6092253160003227301}
-  serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 1
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!1 &6527563364676594288
 GameObject:
   m_ObjectHideFlags: 0
@@ -20316,6 +20734,9 @@ MonoBehaviour:
   - {fileID: 3309491086787495199}
   - {fileID: 0}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &6976370535347841618
 MonoBehaviour:
@@ -20332,6 +20753,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 0}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!65 &7009104439547156056
 BoxCollider:
@@ -20378,13 +20802,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2456968705432442997}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: 0.029021531, w: 0.99957883}
   m_LocalPosition: {x: 2.2072086, y: -0.099999815, z: 2.6791213}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4038905789849354484}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 3.326}
 --- !u!114 &7116611233235994625
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -20400,6 +20824,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 830539666}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &7116611233827183941
 MonoBehaviour:
@@ -20416,6 +20843,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 353622062}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!114 &7116611234829231022
 MonoBehaviour:
@@ -20431,6 +20861,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaypointNode
   neighbours: []
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!23 &7131562555394366520
 MeshRenderer:
@@ -21090,6 +21523,9 @@ MonoBehaviour:
   - {fileID: 4542625606639467887}
   - {fileID: 2594058346480088011}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &7838922577544419886
 Transform:
@@ -21197,6 +21633,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 6976370535347841618}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!1 &8038383121868387820
 GameObject:
@@ -21364,6 +21803,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 871333974058468137}
   isIntersection: 0
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &8317589701487212818
 Transform:
@@ -21454,27 +21896,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3229870120538271503}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!65 &8643609532786648977
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6092253160003227301}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &8648164201837686740
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -21540,6 +21961,9 @@ MonoBehaviour:
   - {fileID: 3158566239203168916}
   - {fileID: 3972224331596733488}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &8675557191956280409
 Transform:
@@ -21671,6 +22095,9 @@ MonoBehaviour:
   neighbours:
   - {fileID: 3347688906265814088}
   isIntersection: 1
+  laneId: 
+  isExitPoint: 0
+  cameraIndex: -1
   gizmoSize: 1
 --- !u!4 &9009641205295193029
 Transform:
@@ -21729,3 +22156,4 @@ SceneRoots:
   - {fileID: 473479233}
   - {fileID: 248790418344354627}
   - {fileID: 2061443334}
+  - {fileID: 360488756}

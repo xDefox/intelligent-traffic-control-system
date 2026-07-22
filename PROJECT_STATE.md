@@ -1,7 +1,7 @@
 # Project State Analysis: Smart Crossroads Belarus (Intelligent Traffic Control System)
 
-> **Дата анализа:** 16.07.2026
-> **Версия бэкенда:** 0.6.0 ("Smart Crossroads UTC-UX Distributed Network")
+> **Дата анализа:** 20.07.2026
+> **Версия бэкенда:** 0.7.0 ("Camera-First Design + Fallback")
 > **Репозиторий:** https://github.com/xDefox/intelligent-traffic-control-system.git
 
 ---
@@ -195,12 +195,19 @@
   - Плавное ускорение/торможение
 
 #### 2.2.6. `IntersectionRightOfWay.cs` — Правило правой руки
-- **Статус:** ✅ Работает
+- **Статус:** ✅ Работает (улучшено v0.8.1)
 - **Функции:**
   - Детекция помехи справа (угловой сектор)
   - Таймер ожидания с защитой от дедлока (3s timeout)
   - Режим подкрадывания (creep) при дедлоке
   - Визуализация секторов и состояний в редакторе
+  - **НОВОЕ (v0.8.0):** Приоритет машин на перекрёстке над приближающимися
+  - **НОВОЕ (v0.8.0):** Приоритет машин, едущих прямо, над поворачивающими
+  - **НОВОЕ (v0.8.0):** Метод `MarkCarOnIntersection()` для отслеживания машин на перекрёстке
+  - **НОВОЕ (v0.8.1):** Система очередей машин на одной оси
+
+#### 2.2.7. `IntersectionRightOfWay.cs` (дополнительно)
+- **НОВОЕ (v0.8.1):** Методы `IsTargetRoadOccupied(string turnDirection)` и `GetTargetRoadCarCount(string direction)`
 
 ---
 
@@ -231,9 +238,9 @@
 | **Green Wave координация** | ✅ Есть (базовая) | GreenWaveCoordinator с линейными коридорами |
 | **Каскадное управление** | ✅ Есть | CloudOrchestrator.calculate_cascade() |
 | **Batch telemetry** | ✅ Есть | 1 POST на перекрёсток вместо N |
-| **Приоритет спецтранспорта** | ⚠️ Планируется | В README упомянут, но не реализован |
+| **Приоритет спецтранспорта** | ✅ Есть (базовая) | Emergency-режим с миганием зелёного, детекция через Physics.OverlapSphere |
 | **Прогнозная аналитика** | ❌ Нет | Только реактивное управление |
-| **Интеграция с картами** | ❌ Нет | Статичная конфигурация в ROADS |
+| **Интеграция с картами** | ⚠️ Частично | Camera-First Design: граф строится динамически из телеметрии |
 | **REST API для внешних систем** | ✅ Есть | FastAPI эндпоинты |
 | **Визуализация/Дашборд** | ✅ Есть | Flet admin panel |
 | **Digital Twin симуляция** | ✅ Есть | Unity 3D сцена |
@@ -246,7 +253,7 @@
 
 3. **Прогнозирование:** В проекте нет ML-моделей для прогноза трафика, только реактивная адаптация.
 
-4. **Приоритет спецтранспорта:** Упомянут в README, но не реализован в коде.
+4. **Приоритет спецтранспорта:** Реализован (Emergency-режим с миганием зелёного)
 
 5. **Реальные данные:** Проект использует симулированные данные из Unity, не реальные камеры.
 
@@ -285,9 +292,10 @@
    - Не учитывает реальную скорость потока
    - Offset рассчитывается от статичных позиций
 
-5. **Нет приоритета спецтранспорта:**
-   - Классы 2,3,5,7 закомментированы в `EdgeVisionCamera.cs`
-   - Нет логики "зелёного коридора" для экстренных служб
+5. **Приоритет спецтранспорта (базовая реализация):**
+   - Emergency-режим реализован (мгновенное зелёное на фазе)
+   - Детекция через Physics.OverlapSphere работает
+   - Классы 2,3,5,7 YOLO можно добавить для улучшения детекции
 
 6. **Отсутствие тестов:**
    - Нет unit-тестов
@@ -295,9 +303,9 @@
    - Нет нагрузочного тестирования
 
 7. **Flet UI ограничен:**
-   - Нет графиков аналитики
-   - Нет сравнения с фиксированным таймером
-   - Нет истории данных
+    - Нет графиков аналитики
+    - Нет сравнения с фиксированным таймером
+    - История данных добавлена (через statistics.py)
 
 ---
 
@@ -318,7 +326,8 @@ D:/Education/Diplom/
 │   │   ├── graph_manager.py             # NetworkX граф дорожной сети
 │   │   ├── cloud_orchestrator.py        # Cloud-уровень (тикер 1с)
 │   │   ├── green_wave.py                # Координатор зелёной волны
-│   │   └── phase_manager.py             # Единый менеджер фаз
+│   │   ├── phase_manager.py             # Единый менеджер фаз
+│   │   └── statistics.py                # Сбор статистики (время ожидания, нагруженность)
 │   └── UI/
 │       └── admin_panel.py               # Flet админ-панель
 ├── Scene/
@@ -487,8 +496,119 @@ python -m backend.UI.admin_panel
 
 **Что нужно для полного соответствия системе Дубай/Абу-Даби:**
 - ❌ Ramp Metering модуль
-- ❌ Приоритет спецтранспорта
+- ⚠️ Приоритет спецтранспорта (улучшить детекцию классов 2,3,5,7)
 - ❌ Прогнозная аналитика (ML)
 - ❌ Масштабирование на реальную карту города
 
-**Рекомендация:** Сфокусироваться на критических архитектурных проблемах (дублирование состояния, унификация per-lane/batch), затем добавить приоритет спецтранспорта (заявлен в README), и только потом — ramp metering и прогнозную аналитику.
+**Рекомендация:** Сфокусироваться на критических архитектурных проблемах (дублирование состояния, унификация per-lane/batch), затем улучшить детекцию спецтранспорта (классы 2,3,5,7 YOLO), и только потом — ramp metering и прогнозную аналитику.
+
+---
+
+## 9. ЛОГИРОВАНИЕ (v0.8.0)
+
+### 9.1. Централизованный логгер
+
+**Файл:** `backend/core/logger.py`
+
+**Концепция:** Управляемое логирование через переменную окружения `LOG_LEVEL`.
+
+**Уровни логирования:**
+- `DEBUG` — все сообщения (много шума, для разработки)
+- `INFO` — основные события (рекомендуется для продакшена)
+- `WARNING` — только предупреждения и ошибки
+- `ERROR` — только ошибки
+- `OFF` — логирование отключено
+
+**Использование:**
+```python
+from backend.core.logger import debug, info, warning, error
+
+# DEBUG - для детальной отладки (видно только при LOG_LEVEL=DEBUG)
+debug("Orchestrator", f"Batch from {inter_id}: {len(batch.cameras)} cameras")
+
+# INFO - для важных событий (видно при LOG_LEVEL=INFO и ниже)
+info("CloudOrchestrator", f"🚨 EMERGENCY: {intersection_id}/{approach} phase={phase}")
+
+# WARNING - для предупреждений
+warning("GraphManager", f"No cameras registered for {intersection_id}")
+
+# ERROR - для ошибок
+error("CloudOrchestrator", f"Tick error: {e}")
+```
+
+**Настройка:**
+```bash
+# По умолчанию INFO (только важные сообщения)
+python -m backend.main
+
+# Для отладки - включить DEBUG
+LOG_LEVEL=DEBUG python -m backend.main
+
+# Отключить логирование
+LOG_LEVEL=OFF python -m backend.main
+```
+
+### 9.2. Camera-First Design (v0.7.0)
+
+**Концепция:** Система строит карту дорог на основе данных камер, а не из конфиг-файла.
+
+**Реализовано:**
+- Камеры отправляют `direction` (N/S/E/W) и `world_position` в batch telemetry
+- Backend автоматически определяет связи между камерами (противоположные направления + расстояние < 200м)
+- Граф строится динамически из телеметрии
+- Endpoint `GET /api/v1/congestion-map` для Unity-машин
+
+**Файлы:**
+- `backend/models/traffic.py` - новые поля в CameraTelemetryDTO
+- `backend/services/graph_manager.py` - `register_camera()`, `_build_edges_from_cameras()`
+- `Scene/Diplom_scene/Assets/Scripts/EdgeVisionCamera.cs` - `GetWorldDirection()`
+- `Scene/Diplom_scene/Assets/Scripts/IntersectionVisionManager.cs` - метаданные в batch
+
+### 9.3. Fallback-механика (v0.7.0)
+
+**Концепция:** При потере связи с бэкендом светофоры автоматически переключаются на статический режим.
+
+**Реализовано:**
+- Счётчик неудачных запросов (порог: 5)
+- При 5 неудачных запросах: автономный цикл включается автоматически
+- При успешном ответе: счётчик сбрасывается
+
+**Файлы:**
+- `Scene/Diplom_scene/Assets/Scripts/LightController.cs` - `OnBackendResponseSuccess/Failed()`, `FallbackCheckRoutine()`
+- `Scene/Diplom_scene/Assets/Scripts/IntersectionVisionManager.cs` - вызов fallback-методов
+
+### 9.4. Удалён граф из admin_panel
+
+- Вкладка "Граф" удалена (осталась только "Список")
+
+### 9.5. Unity Logger (v0.8.0)
+
+**Файл:** `Scene/Diplom_scene/Assets/Scripts/Logger.cs`
+
+**Концепция:** Централизованное логирование в Unity через PlayerPrefs.
+
+**Уровни логирования:**
+- `DEBUG` — все сообщения (много шума, для разработки)
+- `INFO` — основные события (рекомендуется для продакшена)
+- `WARNING` — только предупреждения
+- `ERROR` — только ошибки
+- `OFF` — логирование отключено
+
+**Использование:**
+```csharp
+// DEBUG - для детальной отладки (видно только при LOG_LEVEL=DEBUG)
+Logger.LogDebug("IntersectionVisionManager", $"Camera {i}: {cameraResults[i]} cars");
+
+// INFO - для важных событий (видно при LOG_LEVEL=INFO и ниже)
+Logger.LogInfo("IntersectionVisionManager", $"🚨 Emergency vehicle on camera {i}");
+
+// WARNING - для предупреждений
+Logger.LogWarning("IntersectionVisionManager", $"YOLO model not assigned!");
+
+// ERROR - для ошибок
+Logger.LogError("IntersectionVisionManager", $"Batch request failed: {request.error}");
+```
+
+**Настройка в Unity:**
+- Через PlayerPrefs: `PlayerPrefs.SetString("LOG_LEVEL", "DEBUG")`
+- Или в коде: `Logger.SetLogLevel(Logger.LogLevel.DEBUG)`

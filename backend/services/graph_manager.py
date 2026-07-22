@@ -3,6 +3,7 @@ import asyncio
 import networkx as nx
 from typing import Dict, List, Optional, Tuple, Set
 from backend.core import road_config
+from backend.core.lane_utils import parse_lane_id
 
 
 # ---------------------------------------------------------------------------
@@ -20,20 +21,6 @@ def _parse_links() -> List[Tuple[str, str]]:
             if src and dst:
                 result.append((src, dst))
     return result
-
-
-def _resolve_intersection_and_approach(lane_id: str) -> Tuple[str, str]:
-    """Из lane_id вида 'intersection_1_approach_0' или 'lane_intersection_1_approach_0'
-    достать (intersection_id, approach)"""
-    if lane_id.startswith("lane_"):
-        lane_id = lane_id[5:]  # Убираем "lane_"
-
-    idx = lane_id.find("_approach_")
-    if idx == -1:
-        return ("unknown", lane_id)
-    inter = lane_id[:idx]
-    approach = lane_id[idx + 1:]  # "approach_0"
-    return (inter, approach)
 
 
 def _axis_for_approach(approach_idx: int) -> str:
@@ -109,8 +96,8 @@ class CityTrafficGraph:
         """Построить статический граф связей из конфига (физическая топология)."""
         self.graph.clear()
         for src, dst in _parse_links():
-            src_inter, src_app = _resolve_intersection_and_approach(src)
-            dst_inter, dst_app = _resolve_intersection_and_approach(dst)
+            src_inter, src_app = parse_lane_id(src)
+            dst_inter, dst_app = parse_lane_id(dst)
             self.graph.add_node((src_inter, src_app))
             self.graph.add_node((dst_inter, dst_app))
             self.graph.add_edge(
@@ -289,7 +276,7 @@ class CityTrafficGraph:
         Обновить состояние полосы от камеры. Вернуть congestion_index.
         При первом появлении lane_id — динамически регистрирует подход.
         """
-        inter_id, approach = _resolve_intersection_and_approach(lane_id)
+        inter_id, approach = parse_lane_id(lane_id)
         if inter_id == "unknown":
             return 0.0
 
@@ -482,8 +469,8 @@ class CityTrafficGraph:
 
         links = []
         for src, dst in _parse_links():
-            src_inter, _ = _resolve_intersection_and_approach(src)
-            dst_inter, _ = _resolve_intersection_and_approach(dst)
+            src_inter, _ = parse_lane_id(src)
+            dst_inter, _ = parse_lane_id(dst)
             if src_inter in intersections and dst_inter in intersections:
                 links.append((src_inter, dst_inter))
 

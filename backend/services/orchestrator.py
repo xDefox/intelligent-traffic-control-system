@@ -1,14 +1,17 @@
 # backend/services/orchestrator.py
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from backend.models.traffic import (
-    IntersectionUpdateDTO, BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
+    BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
 )
-from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
+from backend.services.statistics import traffic_stats, CongestionSnapshot
+from backend.core.logger import debug, info, warning, error
+from backend.core.lane_utils import normalize_lane_id, extract_approach_from_camera_id
+from backend.core.emergency import EmergencyDetector
 import time
 
 
@@ -28,57 +31,6 @@ class TrafficOrchestrator:
         self.cloud = cloud
         self.phase_manager = PhaseManager()
 
-    async def handle_telemetry(self, update: IntersectionUpdateDTO) -> dict:
-        """Обработать телеметрию с одной камеры."""
-        inter_id = update.intersection_id
-        camera_id = update.camera_id
-
-        if camera_id not in self.traffic_brains:
-            self.traffic_brains[camera_id] = AdaptiveTrafficBrain(camera_id, self.phase_manager, is_per_lane=True)
-
-        brain = self.traffic_brains[camera_id]
-
-        if self.cloud:
-            for cmd in self.cloud.get_cascade_commands():
-                if cmd.get("target_intersection") == inter_id:
-                    brain.apply_cascade_command(cmd)
-
-        async with traffic_network.lane_pool_lock:
-            target_command, green_duration = brain.process_lane_telemetry(update)
-
-        # Получаем фазу из единого PhaseManager (единственный источник истины)
-        approach = camera_id.replace(f"{inter_id}_", "")
-        lane_phase = traffic_network.get_phase_for_approach(inter_id, approach)
-        phase_state = self.phase_manager.get_or_create(inter_id)
-        active_phase = phase_state.active_phase or "UNKNOWN"
-
-        ui_lanes = []
-        for lane in update.lanes:
-            lane_state = traffic_network.lane_pool.get(lane.lane_id, {})
-            ui_lanes.append({
-                "lane_id": lane.lane_id,
-                "car_count": lane.car_count,
-                "avg_speed": lane.avg_speed,
-                "load_pct": int(lane_state.get("congestion_index", 0) * 100),
-                "light": target_command,
-                "phase_name": lane_phase or "UNKNOWN",
-                "max_capacity": lane.max_capacity,
-            })
-
-        ui_payload = {
-            "type": "lane_update",
-            "intersection_id": inter_id,
-            "lane_id": camera_id,
-            "command": target_command,
-            "current_phase": active_phase,
-            "green_duration": green_duration,
-            "lanes": ui_lanes,
-        }
-        if self.ws_manager:
-            await self.ws_manager.broadcast(json.dumps(ui_payload))
-
-        return {"target_phase": target_command, "green_duration": green_duration, "cascade_applied": False}
-
     async def handle_batch_telemetry(self, batch: BatchTelemetryDTO) -> list:
         """
         Обработать batch-телеметрию от ВСЕХ камер одного перекрёстка.
@@ -93,23 +45,12 @@ class TrafficOrchestrator:
         inter_id = batch.intersection_id
         
         # DEBUG: логируем входящий batch
-        print(f"[DEBUG] Batch from {inter_id}: {len(batch.cameras)} cameras")
+        debug("Orchestrator", f"Batch from {inter_id}: {len(batch.cameras)} cameras")
         for cam in batch.cameras:
-            print(f"[DEBUG]   Camera: {cam.camera_id}")
+            debug("Orchestrator", f"  Camera: {cam.camera_id}")
         
         # ШАГ 0.5: Проверяем emergency (спецтранспорт)
-        emergency_detected = False
-        emergency_approach = None
-        emergency_phase = None
-        
-        for cam in batch.cameras:
-            if cam.emergency_vehicle_detected and cam.emergency_approach:
-                emergency_detected = True
-                emergency_approach = cam.emergency_approach
-                # Определяем фазу для emergency подхода
-                emergency_phase = traffic_network.get_phase_for_approach(inter_id, emergency_approach)
-                print(f"[EMERGENCY] 🚨 Спецтранспорт на {inter_id}/{emergency_approach} → фаза {emergency_phase}")
-                break  # Первый обнаруженный = приоритет
+        emergency_detected, emergency_approach, emergency_phase = self._detect_emergency(batch)
         
         # Если emergency — сообщаем Cloud для каскадирования
         if emergency_detected and self.cloud:
@@ -119,7 +60,71 @@ class TrafficOrchestrator:
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
         
         # ШАГ 0.5: Регистрация камер (Camera-First Design)
-        for cam in batch.cameras:
+        self._register_cameras(batch.cameras, inter_id)
+        
+        # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
+        async with traffic_network.lane_pool_lock:
+            self._update_lane_pool(batch.cameras)
+        
+        # ШАГ 2: Конфиг фаз (автоматически сгенерирован из направлений камер)
+        phases_config = traffic_network.intersection_phases.get(inter_id, {})
+        phase_names = list(phases_config.keys())
+        
+        debug("Orchestrator", f"  Intersection {inter_id}: approaches={traffic_network.intersection_approaches.get(inter_id)}, phases={phase_names}")
+        debug("Orchestrator", f"  Graph nodes: {len(traffic_network.graph.nodes)}, edges: {len(traffic_network.graph.edges)}")
+        
+        if not phase_names:
+            return [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0) for cam in batch.cameras]
+        
+        # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
+        active_phase, elapsed, emergency_override, green_wave_override = self._decide_phase(
+            inter_id, phase_names, green_wave_commands, emergency_approach
+        )
+        
+        # ШАГ 4: Длительность зелёного
+        green_duration = self._calculate_green_duration(active_phase, phase_names)
+        
+        # ШАГ 5: Определяем направления активной фазы
+        active_approaches = self._get_active_approaches(phases_config, active_phase)
+        
+        # ШАГ 5.5-5.6: Запись статистики
+        self._record_statistics(batch, inter_id, active_phase)
+        
+        # ШАГ 6: Формируем ответы и одно UI-сообщение
+        responses, batch_ui_payloads = self._build_responses(
+            batch, inter_id, active_phase, active_approaches, green_duration,
+            elapsed, green_wave_override
+        )
+        
+        # Одно broadcast-сообщение для всех камер перекрёстка
+        if self.ws_manager and batch_ui_payloads:
+            await self.ws_manager.broadcast(json.dumps({
+                "type": "batch_lane_update",
+                "intersection_id": inter_id,
+                "current_phase": active_phase or "UNKNOWN",
+                "phase_elapsed": round(elapsed, 1) if active_phase else 0.0,
+                "cameras": batch_ui_payloads,
+            }))
+        
+        # Возвращаем responses + emergency информацию
+        emergency_phase_for_response = emergency_phase
+        if emergency_override:
+            emergency_phase_for_response = emergency_override.get("phase")
+        return responses, emergency_detected or (emergency_override is not None), emergency_phase_for_response
+
+    # ===================== ВЫДЕЛЕННЫЕ МЕТОДЫ =====================
+
+    def _detect_emergency(self, batch: BatchTelemetryDTO) -> Tuple[bool, Optional[str], Optional[str]]:
+        """ШАГ 0.5: Проверить batch на наличие спецтранспорта."""
+        inter_id = batch.intersection_id
+        emergency_detected, emergency_approach, emergency_phase = EmergencyDetector.detect(batch)
+        if emergency_detected:
+            info("Orchestrator", f"🚨 Emergency: {inter_id}/{emergency_approach} → phase {emergency_phase}")
+        return emergency_detected, emergency_approach, emergency_phase
+
+    def _register_cameras(self, cameras: List[CameraTelemetryDTO], inter_id: str):
+        """ШАГ 0.5: Регистрация камер (Camera-First Design)."""
+        for cam in cameras:
             if cam.direction and cam.world_position:
                 traffic_network.register_camera({
                     "camera_id": cam.camera_id,
@@ -128,32 +133,24 @@ class TrafficOrchestrator:
                     "world_position": cam.world_position,
                     "world_rotation": cam.world_rotation,
                 })
-        
-        # ШАГ 1: Обновляем lane_pool от ВСЕХ камер
-        async with traffic_network.lane_pool_lock:
-            for cam in batch.cameras:
-                for lane in cam.lanes:
-                    # Нормализуем lane_id: добавляем префикс "lane_" если его нет
-                    lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
-                    print(f"[DEBUG]   Lane: {lane_id}, cars={lane.car_count}, max_cap={lane.max_capacity}")
-                    traffic_network.update_lane_state(
-                        lane_id=lane_id,
-                        car_count=lane.car_count,
-                        avg_speed=lane.avg_speed,
-                        max_capacity=lane.max_capacity,
-                    )
-        
-        # ШАГ 2: Конфиг фаз (автоматически сгенерирован из направлений камер)
-        phases_config = traffic_network.intersection_phases.get(inter_id, {})
-        phase_names = list(phases_config.keys())
-        
-        print(f"[DEBUG]   Intersection {inter_id}: approaches={traffic_network.intersection_approaches.get(inter_id)}, phases={phase_names}")
-        print(f"[DEBUG]   Graph nodes: {len(traffic_network.graph.nodes)}, edges: {len(traffic_network.graph.edges)}")
-        
-        if not phase_names:
-            return [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0) for cam in batch.cameras]
-        
-        # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
+
+    def _update_lane_pool(self, cameras: List[CameraTelemetryDTO]):
+        """ШАГ 1: Обновить lane_pool от ВСЕХ камер."""
+        for cam in cameras:
+            for lane in cam.lanes:
+                lane_id = normalize_lane_id(lane.lane_id)
+                debug("Orchestrator", f"  Lane: {lane_id}, cars={lane.car_count}, max_cap={lane.max_capacity}")
+                traffic_network.update_lane_state(
+                    lane_id=lane_id,
+                    car_count=lane.car_count,
+                    avg_speed=lane.avg_speed,
+                    max_capacity=lane.max_capacity,
+                )
+
+    def _decide_phase(self, inter_id: str, phase_names: List[str],
+                      green_wave_commands: List[dict],
+                      emergency_approach: Optional[str]) -> Tuple[str, float, Optional[dict], Optional[dict]]:
+        """ШАГ 3: Принять решение о фазе через PhaseManager."""
         phase_state = self.phase_manager.get_or_create(inter_id)
         active_phase = phase_state.active_phase
         elapsed = phase_state.elapsed
@@ -186,7 +183,7 @@ class TrafficOrchestrator:
         if emergency_override:
             emergency_phase = emergency_override.get("phase")
             if emergency_phase and emergency_phase in phase_names:
-                print(f"[EMERGENCY] 🚨 Принудительная фаза {emergency_phase} на {inter_id}")
+                info("Orchestrator", f"🚨 Emergency override: phase {emergency_phase} on {inter_id}")
                 active_phase = emergency_phase
                 self.phase_manager.switch_phase(inter_id, active_phase)
                 phase_state = self.phase_manager.get_or_create(inter_id)
@@ -194,7 +191,6 @@ class TrafficOrchestrator:
         # Применяем зелёную волну если есть команда (и нет emergency)
         elif green_wave_override:
             gw_phase = green_wave_override.get("phase")
-            
             if gw_phase in phase_names:
                 # Зелёная волна уже отфильтрована в calculate_green_wave() по времени
                 # Если команда пришла — значит сейчас окно зелёной волны
@@ -228,7 +224,17 @@ class TrafficOrchestrator:
                     phase_state = self.phase_manager.get_or_create(inter_id)
                     elapsed = phase_state.elapsed
         
-        # ШАГ 4: Длительность зелёного
+        return active_phase, elapsed, emergency_override, green_wave_override
+
+    def _calculate_green_duration(self, active_phase: str, phase_names: List[str]) -> float:
+        """ШАГ 4: Длительность зелёного на основе загруженности."""
+        # Считаем машины на каждой фазе
+        phase_cars = {pn: 0 for pn in phase_names}
+        for lane_id, data in traffic_network.lane_pool.items():
+            lane_phase = traffic_network.get_phase_for_approach(data["intersection_id"], data["approach"])
+            if lane_phase in phase_cars:
+                phase_cars[lane_phase] += data["car_count"]
+        
         total_cars = sum(phase_cars.values())
         if total_cars > 0 and active_phase:
             load = phase_cars.get(active_phase, 0) / max(total_cars, 1)
@@ -236,22 +242,82 @@ class TrafficOrchestrator:
         else:
             green_duration = 10.0
         
-        # ШАГ 5: Определяем направления активной фазы
-        active_approaches = []
+        return green_duration
+
+    def _get_active_approaches(self, phases_config: Dict[str, dict], active_phase: str) -> List[str]:
+        """ШАГ 5: Определить направления активной фазы."""
         for pn, pd in phases_config.items():
             if pn == active_phase:
-                active_approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
-                break
+                return pd.get("approaches", []) if isinstance(pd, dict) else pd
+        return []
+
+    def _record_statistics(self, batch: BatchTelemetryDTO, inter_id: str, active_phase: str):
+        """ШАГ 5.5-5.6: Записать статистику переключения фазы и congestion snapshot."""
+        # Записываем статистику переключения фазы
+        prev_phase = self.phase_manager.get_state(inter_id)
+        prev_active_phase = prev_phase.active_phase if prev_phase else None
         
-        # ШАГ 6: Формируем ответы и одно UI-сообщение
+        # Если фаза изменилась - записываем статистику
+        if prev_active_phase != active_phase:
+            traffic_stats.record_phase_switch(inter_id)
+        
+        # Записываем congestion snapshot для перекрёстка
+        lane_congestions = {}
+        total_cars = 0
+        active_lanes_count = 0
+        
+        for cam in batch.cameras:
+            for lane in cam.lanes:
+                norm_lane_id = normalize_lane_id(lane.lane_id)
+                lane_state = traffic_network.lane_pool.get(norm_lane_id, {})
+                congestion = lane_state.get("congestion_index", 0.0)
+                lane_congestions[norm_lane_id] = congestion
+                total_cars += lane.car_count
+                active_lanes_count += 1
+        
+        traffic_stats.record_congestion_snapshot(
+            intersection_id=inter_id,
+            lane_congestions=lane_congestions,
+            total_cars=total_cars,
+            active_lanes=active_lanes_count,
+            phase=active_phase or "UNKNOWN",
+        )
+
+    def apply_emergency_override(self, responses: List[SingleResponseDTO],
+                                 inter_id: str, emergency_phase: Optional[str]) -> List[SingleResponseDTO]:
+        """
+        Применить emergency_override к ответам: пометить камеры,
+        принадлежащие emergency фазе, флагом emergency_override=True.
+        """
+        if not emergency_phase:
+            return responses
+
+        phases_config = traffic_network.intersection_phases.get(inter_id, {})
+        emergency_approaches = []
+        for pn, pd in phases_config.items():
+            if pn == emergency_phase:
+                emergency_approaches = pd.get("approaches", []) if isinstance(pd, dict) else pd
+                break
+
+        for resp in responses:
+            direction = extract_approach_from_camera_id(resp.camera_id)
+            if direction in emergency_approaches:
+                resp.emergency_override = True
+
+        return responses
+
+    def _build_responses(self, batch: BatchTelemetryDTO, inter_id: str,
+                         active_phase: str, active_approaches: List[str],
+                         green_duration: float, elapsed: float,
+                         green_wave_override: Optional[dict]) -> Tuple[List[SingleResponseDTO], List[dict]]:
+        """ШАГ 6: Сформировать ответы и UI-сообщения для всех камер."""
         responses = []
         batch_ui_payloads = []
         seen_lanes = set()  # Для дедупликации lane_id
         
         for cam in batch.cameras:
             # direction = approach (извлекаем из camera_id)
-            direction = cam.camera_id.split("_approach_")[-1] if "_approach_" in cam.camera_id else cam.camera_id
-            direction = f"approach_{direction}" if not direction.startswith("approach_") else direction
+            direction = extract_approach_from_camera_id(cam.camera_id)
             is_active = direction in active_approaches
             cmd = "GREEN" if is_active else "RED"
             dur = green_duration if is_active else 0.0
@@ -265,7 +331,7 @@ class TrafficOrchestrator:
             ui_lanes = []
             for lane in cam.lanes:
                 # Нормализуем lane_id ТАК ЖЕ, как при register_lane_data (префикс "lane_")
-                norm_lane_id = lane.lane_id if lane.lane_id.startswith("lane_") else f"lane_{lane.lane_id}"
+                norm_lane_id = normalize_lane_id(lane.lane_id)
                 
                 # ДЕДУПЛИКАЦИЯ: пропускаем если уже добавляли этот lane_id
                 if norm_lane_id in seen_lanes:
@@ -310,22 +376,8 @@ class TrafficOrchestrator:
                 "lanes": ui_lanes,
                 "green_wave": green_wave_info,
             })
-
-        # Одно broadcast-сообщение для всех камер перекрёстка
-        if self.ws_manager and batch_ui_payloads:
-            await self.ws_manager.broadcast(json.dumps({
-                "type": "batch_lane_update",
-                "intersection_id": inter_id,
-                "current_phase": active_phase or "UNKNOWN",
-                "phase_elapsed": round(elapsed, 1) if active_phase else 0.0,
-                "cameras": batch_ui_payloads,
-            }))
-
-        # Возвращаем responses + emergency информацию
-        emergency_phase_for_response = emergency_phase
-        if emergency_override:
-            emergency_phase_for_response = emergency_override.get("phase")
-        return responses, emergency_detected or (emergency_override is not None), emergency_phase_for_response
+        
+        return responses, batch_ui_payloads
 
     @staticmethod
     def _pick_phase(phase_names: List[str], phase_cars: Dict[str, int],
