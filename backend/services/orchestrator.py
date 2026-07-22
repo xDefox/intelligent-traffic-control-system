@@ -4,7 +4,6 @@ from typing import Dict, List
 from backend.models.traffic import (
     IntersectionUpdateDTO, BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
 )
-from backend.services.traffic_brain import AdaptiveTrafficBrain
 from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
