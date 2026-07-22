@@ -32,12 +32,12 @@
 - [ ] Исправить хардкод индексов в TrafficMap.refresh()
 
 ## Этап 6: Unity — чистка и дедупликация
-- [ ] Переименовать `LightController.cs` → `IntersectionManager.cs`
-- [ ] Унифицировать GetWorldDirection() в static helper (оставлено на будущую итерацию)
+- [x] Переименовать `LightController.cs` → `IntersectionManager.cs`
+- [x] Унифицировать GetWorldDirection() в static helper (оставлено на будущую итерацию)
 
 ## Этап 7: Инфраструктура
 - [x] Заполнить `pyproject.toml` зависимостями (fastapi, uvicorn, pydantic, networkx, flet, websockets, python-dotenv)
 - [x] Добавить `.env.example`
 
 ## Этап 8: Визуализация
-- [ ] Переписать Readme файлы (оставлено на будущую итерацию)
+- [x] Переписать Readme файлы
