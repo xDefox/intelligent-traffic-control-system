@@ -1,7 +1,38 @@
 [project]
 name = "diplom"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.7.0"
+description = "Intelligent Traffic Control System — distributed UTC-UX network with fog/cloud orchestration"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.7.0",
+    "networkx>=3.3.0",
+    "flet>=0.21.0",
+    "websockets>=12.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+diplom = "main:app"
+
+[tool.uvicorn]
+host = "127.0.0.1"
+port = 8050
+reload = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]
