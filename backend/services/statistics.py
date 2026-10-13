@@ -12,10 +12,10 @@ Statistics Service - аналитическая система трафика.
 
 import time
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from collections import deque
 from dataclasses import dataclass, field
-from backend.core.logger import debug, info, warning
+from backend.core.logger import info, warning
 
 
 # Константы

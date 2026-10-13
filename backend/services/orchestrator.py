@@ -8,11 +8,10 @@ from backend.services.graph_manager import traffic_network
 from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
-from backend.services.statistics import traffic_stats, CongestionSnapshot
-from backend.core.logger import debug, info, warning, error
+from backend.services.statistics import traffic_stats
+from backend.core.logger import debug, info
 from backend.core.lane_utils import normalize_lane_id, extract_approach_from_camera_id
 from backend.core.emergency import EmergencyDetector
-import time
 
 
 class TrafficOrchestrator:
@@ -26,7 +25,6 @@ class TrafficOrchestrator:
     """
 
     def __init__(self, ws_manager, cloud: CloudOrchestrator = None):
-        self.traffic_brains: Dict[str, AdaptiveTrafficBrain] = {}
         self.ws_manager = ws_manager
         self.cloud = cloud
         self.phase_manager = PhaseManager()
@@ -123,16 +121,23 @@ class TrafficOrchestrator:
         return emergency_detected, emergency_approach, emergency_phase
 
     def _register_cameras(self, cameras: List[CameraTelemetryDTO], inter_id: str):
-        """ШАГ 0.5: Регистрация камер (Camera-First Design)."""
+        """ШАГ 0.5: Регистрация камер (Camera-First Design).
+
+        Топология перестраивается ОДИН раз на батч (см. register_cameras):
+        это O(C²) вместо O(C³) при построении после каждой камеры.
+        """
+        new_cameras = []
         for cam in cameras:
             if cam.direction and cam.world_position:
-                traffic_network.register_camera({
+                new_cameras.append({
                     "camera_id": cam.camera_id,
                     "intersection_id": inter_id,
                     "direction": cam.direction,
                     "world_position": cam.world_position,
                     "world_rotation": cam.world_rotation,
                 })
+        if new_cameras:
+            traffic_network.register_cameras(new_cameras)
 
     def _update_lane_pool(self, cameras: List[CameraTelemetryDTO]):
         """ШАГ 1: Обновить lane_pool от ВСЕХ камер."""
@@ -252,15 +257,11 @@ class TrafficOrchestrator:
         return []
 
     def _record_statistics(self, batch: BatchTelemetryDTO, inter_id: str, active_phase: str):
-        """ШАГ 5.5-5.6: Записать статистику переключения фазы и congestion snapshot."""
-        # Записываем статистику переключения фазы
-        prev_phase = self.phase_manager.get_state(inter_id)
-        prev_active_phase = prev_phase.active_phase if prev_phase else None
-        
-        # Если фаза изменилась - записываем статистику
-        if prev_active_phase != active_phase:
-            traffic_stats.record_phase_switch(inter_id)
-        
+        """ШАГ 5.5: Записать congestion snapshot для перекрёстка.
+
+        Переключения фаз учитываются в cloud_orchestrator._record_statistics()
+        (по изменению фазы между тиками); здесь фаза уже переключена заранее.
+        """
         # Записываем congestion snapshot для перекрёстка
         lane_congestions = {}
         total_cars = 0

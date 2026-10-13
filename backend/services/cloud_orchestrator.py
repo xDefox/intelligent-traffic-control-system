@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from backend.services.graph_manager import traffic_network
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.statistics import traffic_stats
-from backend.core.logger import debug, info, warning, error
+from backend.core.logger import debug, info, error
 
 
 class CloudOrchestrator:
@@ -93,10 +93,10 @@ class CloudOrchestrator:
         self._last_cascade_commands = commands
         
         # 5. Вычисляем агрегаты по перекрёсткам
-        total_cars, inter_summary, lane_congestions_by_inter = self._compute_intersection_summary()
+        total_cars, inter_summary = self._compute_intersection_summary()
         
-        # 6. Запись статистики
-        self._record_statistics(inter_summary, lane_congestions_by_inter, commands)
+        # 6. Запись статистики (переключения фаз; congestion snapshot пишет orchestrator)
+        self._record_statistics(inter_summary, commands)
         
         # 7. Broadcast состояния
         await self._broadcast_state(commands, total_cars, inter_summary)
@@ -142,23 +142,30 @@ class CloudOrchestrator:
             upstream_map = traffic_network.get_upstream_intersections(self._emergency_intersection)
             if self._emergency_approach in upstream_map:
                 for up_inter in upstream_map[self._emergency_approach]:
-                    # Определяем фазу на upstream перекрёстке для этого подхода
+                    # Подход на upstream-перекрёстке, по которому едет спецтранспорт,
+                    # определяется по ребру графа (up_inter, up_app) -> (emergency, approach).
+                    up_approach = traffic_network.get_approach_toward(
+                        up_inter, self._emergency_intersection, self._emergency_approach)
                     up_phase = None
-                    for lane_id, data in traffic_network.lane_pool.items():
-                        if data["intersection_id"] == up_inter:
-                            up_phase = traffic_network.get_phase_for_approach(up_inter, data["approach"])
-                            break
-                    
+                    if up_approach:
+                        up_phase = traffic_network.get_phase_for_approach(up_inter, up_approach)
+                    if up_phase is None:
+                        # Fallback: первый зарегистрированный подход upstream-перекрёстка
+                        for lane_id, data in traffic_network.lane_pool.items():
+                            if data["intersection_id"] == up_inter:
+                                up_phase = traffic_network.get_phase_for_approach(up_inter, data["approach"])
+                                break
+
                     cascade_cmd = {
                         "target_intersection": up_inter,
                         "action": "EMERGENCY_GREEN",
-                        "approach": self._emergency_approach,
+                        "approach": up_approach if up_approach else self._emergency_approach,
                         "phase": up_phase,
                         "reason": f"🚨 Каскад: спецтранспорт едет к {self._emergency_intersection}",
                         "emergency": True,
                     }
                     commands.insert(0, cascade_cmd)
-                    info("CloudOrchestrator", f"🚨 Cascade EMERGENCY on {up_inter} phase={up_phase}")
+                    info("CloudOrchestrator", f"🚨 Cascade EMERGENCY on {up_inter} approach={up_approach} phase={up_phase}")
             
             self._emergency_cascade_done = True
         
@@ -172,35 +179,34 @@ class CloudOrchestrator:
             self._emergency_phase = None
             self._emergency_cascade_done = False
 
-    def _compute_intersection_summary(self) -> Tuple[int, Dict[str, dict], Dict[str, Dict[str, float]]]:
+    def _compute_intersection_summary(self) -> Tuple[int, Dict[str, dict]]:
         """
-        Вычислить агрегаты по перекрёсткам: общее число машин,
-        сводка по каждому перекрёстку и карта загруженности.
+        Вычислить агрегаты по перекрёсткам: общее число машин
+        и сводка по каждому перекрёстку.
         """
         total_cars = sum(d["car_count"] for d in traffic_network.lane_pool.values())
         inter_summary: Dict[str, dict] = {}
-        lane_congestions_by_inter: Dict[str, Dict[str, float]] = {}
         
         for lane_id, data in traffic_network.lane_pool.items():
             iid = data["intersection_id"]
             if iid not in inter_summary:
                 inter_summary[iid] = {"total_lanes": 0, "total_cars": 0, "avg_congestion": 0.0}
-                lane_congestions_by_inter[iid] = {}
             inter_summary[iid]["total_lanes"] += 1
             inter_summary[iid]["total_cars"] += data["car_count"]
             inter_summary[iid]["avg_congestion"] += data.get("congestion_index", 0)
-            lane_congestions_by_inter[iid][lane_id] = data.get("congestion_index", 0.0)
         
         for iid in inter_summary:
             lanes = inter_summary[iid]["total_lanes"]
             inter_summary[iid]["avg_congestion"] /= max(lanes, 1)
         
-        return total_cars, inter_summary, lane_congestions_by_inter
+        return total_cars, inter_summary
 
-    def _record_statistics(self, inter_summary: Dict[str, dict],
-                           lane_congestions_by_inter: Dict[str, Dict[str, float]],
-                           commands: List[dict]):
-        """Отслеживание переключений фаз и запись congestion snapshot для каждого перекрёстка."""
+    def _record_statistics(self, inter_summary: Dict[str, dict], commands: List[dict]):
+        """Отслеживание переключений фаз по тикам (раз в секунду).
+
+        Congestion-snapshot записывается в orchestrator._record_statistics()
+        по каждой пришедшей телеметрии — здесь повторно не дублируем.
+        """
         for iid in inter_summary:
             # Определяем текущую фазу перекрёстка из lane_pool или cascade команд
             current_phase = self._get_intersection_phase(iid, commands)
@@ -210,14 +216,6 @@ class CloudOrchestrator:
             if prev_phase and prev_phase != current_phase:
                 traffic_stats.record_phase_switch(iid)
             self._prev_intersection_phases[iid] = current_phase
-            
-            traffic_stats.record_congestion_snapshot(
-                intersection_id=iid,
-                lane_congestions=lane_congestions_by_inter.get(iid, {}),
-                total_cars=inter_summary[iid]["total_cars"],
-                active_lanes=inter_summary[iid]["total_lanes"],
-                phase=current_phase,
-            )
 
     async def _broadcast_state(self, commands: List[dict], total_cars: int,
                                inter_summary: Dict[str, dict]):

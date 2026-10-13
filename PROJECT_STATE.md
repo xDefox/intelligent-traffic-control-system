@@ -1,8 +1,75 @@
 # Project State Analysis: Smart Crossroads Belarus (Intelligent Traffic Control System)
 
-> **Дата анализа:** 20.07.2026
+> **Дата анализа:** 20.07.2026 (последняя ревизия: 13.10.2026)
 > **Версия бэкенда:** 0.7.0 ("Camera-First Design + Fallback")
 > **Репозиторий:** https://github.com/xDefox/intelligent-traffic-control-system.git
+
+---
+
+## 0. ЖУРНАЛ РЕВИЗИИ (сессия 13.10.2026)
+
+### 0.1. Исправлено (код бэкенда)
+
+| Файл | Что исправлено | Почему / обоснование |
+|------|----------------|----------------------|
+| `backend/core/road_config.py` | Ссылка `lane_intersection_2_approach_1 -> lane_intersection_3X_approach_0` | Ранее была ссылка на несуществующий узел `intersection_3` — перекрёсток фактически называется `intersection_3X`, поэтому рёбра/каскады по этому линку не строились. |
+| `backend/services/orchestrator.py` | Удалены `import time`, аннотация `self.traffic_brains: Dict[str, AdaptiveTrafficBrain]` (имя не определено), мёртвый блок записи переключений фаз внутри `_record_statistics` | Неиспользуемые импорты/символы — шум и риск `NameError`; блок переключений фаз в stats **никогда не срабатывал** (проверял фазу до переключения, а она уже переключена) и дублировал cloud-тикер. |
+| `backend/services/cloud_orchestrator.py` | Удалён дублирующий вызов записи congestion-snapshot; `_compute_intersection_summary()` возвращает `(total_cars, inter_summary)`; `_record_statistics(inter_summary, commands)`; удалён неиспользуемый импорт `warning` | До дедупликации за один батч (≈3 тика cloud) писала 3 снапшота загрузки на перекрёсток — статистика «звенела». Теперь snapshot пишет **только** fog-оркестратор (per batch), переключения фаз — **только** cloud-тикер. |
+| `backend/services/graph_manager.py` | Удалён мёртвый `_build_static_topology()`; добавлены `register_cameras()` (батч), `rebuild_topology()`, `get_approach_toward()`; `_build_edges_from_cameras()` теперь делает `graph.clear()` | См. 0.2 (Big-O) и 0.3 (Emergency). `graph.clear()` устраняет накопление **устаревших рёбер** при смене метаданных камеры (рёбра ранее не чистились никогда). |
+| `backend/models/traffic.py` | Удалён `IntersectionUpdateDTO` | Мёртвый DTO, нигде не используется. |
+| `backend/UI/ui/panels.py`, `map.py`, `core/lane_utils.py`, `core/logger.py`, `green_wave.py`, `statistics.py` | Вычищены неиспользуемые импорты (ruff F401/F841), `except Exception as e` без использования `e` | Чистота по `ruff check backend/ --select F401,F821,F811,F841` → **All checks passed**. |
+| `backend/main.py` | Версия 0.7.0; `uvicorn.run("backend.main:app", ...)`; `load_dotenv()` в начале модуля; хост/порт из `BACKEND_HOST`/`BACKEND_PORT` | `import main` ломался (модуль лежит в пакете `backend`, top-level `main` не существует); env-конфигурация теперь зачитывается до импорта настроек. |
+| `backend/main.py` | **Найден и исправлен сломанный роут** `GET /api/v1/statistics/{lane_id}`: вызывал несуществующий `traffic_stats.get_lane_history(...)` → гарантированный 500 | Переписан на существующий `get_intersection_timeseries(inter_id, seconds)` через `parse_lane_id(lane_id)` (параметры `seconds`/`limit`). |
+| `backend/services/cloud_orchestrator.py` | Каскад emergency — см. 0.3 | — |
+| `backend/services/orchestrator.py` | `_register_cameras()` зовёт `traffic_network.register_cameras(...)` **один раз** на батч | См. 0.2 (Big-O). |
+
+### 0.2. Big-O: батч-регистрация камер (O(C³) → O(C²))
+
+**Проблема:** `register_camera()` вызывался для каждой камеры в цикле, и каждая запись перестраивала топологию целиком — полных перестроек было `C`, каждая стоимостью `O(C²)` (попарная проверка «связаны ли камеры»), итого **O(C³)** на батч.
+
+**Решение:** добавлен `register_cameras(cameras: List[dict])` — все метаданные пишутся в `camera_registry` (O(1) на камеру), затем **одна** `rebuild_topology()` → O(C²) на батч. `register_camera()` сохранён как публичный API (семантика прежняя: метаданные + перестроение) — для внешних вызовов.
+
+**Замер (до/после, 4 уникальных перекрёстка, идентичная итоговая топология):**
+
+| C (камер) | old `register_camera` | new `register_cameras` | ускорение |
+|-----------|----------------------|------------------------|-----------|
+| 10 | 0.3 ms | 0.0 ms | ×7.7 |
+| 20 | 0.5 ms | 0.0 ms | ×12.9 |
+| 40 | 1.0 ms | 0.0 ms | ×25.2 |
+
+Рост ускорения ≈ ×2 на удвоение C подтверждает смену класса сложности O(C³)→O(C²).
+
+### 0.3. Emergency: каскад на точный upstream-подход
+
+**Проблема:** в `_process_emergency()` фаза для upstream-перекрёстка бралась от **первой попавшейся** полосы `up_inter` (`for ... in lane_pool: break`) — «зелёный коридор» мог зеленить не ту дорогу, откуда реально едет спецтранспорт.
+
+**Решение:** добавлен `graph_manager.get_approach_toward(source_inter, target_inter, target_approach)` — ищет входящее ребро `(up_inter, up_app) -> (emergency_inter, emergency_approach)` в графе (O(indegree) через `in_edges`), возвращает `up_app`; фаза берётся `get_phase_for_approach(up_inter, up_app)`; в `cascade_cmd["approach"]` кладётся реальный подход. Fallback на первый зарегистрированный подход сохранён (`lane_pool`).
+
+**Тест** (`/tmp/opencode/emergency_test.py`, 10/10 PASS): каскад по ребру 2↔3X ставит на `intersection_2` **approach_1** с корректной фазой (ранее — произвольный первый подход). Emergency сбрасывается по таймеру (10 тиков).
+
+### 0.4. Что протестировано (все зелёные)
+
+- **Setup:** создан `.venv` (Python 3.14.7, требования >=3.13 выполнены), установлено `pip install -e ".[dev]" httpx`.
+- **py_compile:** все `.py` бэкенда и `analysis/` — OK.
+- **ruff:** `ruff check backend/ --select F401,F821,F811,F841` → All checks passed.
+- **Smoke** (`/tmp/opencode/smoke_test.py`, запуск из корня репо `.venv/bin/python`): импорт приложения, версия 0.7.0, валидность `road_config` (все ссылки), POST batch для intersection_2/1/3X → 200, `GET /state`, `/congestion-map`, `/statistics`, `/statistics/{lane_id}` (lane history не пуста), и **дедупликация снапшотов**: ровно 1 запись загрузки на перекрёсток несмотря на ~3 тика cloud на батч.
+- **Emergency** (см. 0.3).
+- **Benchmark** (см. 0.2).
+
+### 0.5. Инфраструктура / документация (в этой ревизии)
+
+- `pyproject.toml`: добавлен `[tool.setuptools.packages.find] include = ["backend*"]` (иначе `pip install -e .` из README падал: «no package»), entrypoint исправлен `diplom = "backend.main:app"` (был `"main:app"` — top-level модуля нет). Установка зависимостей из README теперь работает.
+- `README.md`: `pip install -e .`, Unity 6 (6000.2.5f1) вместо 2022.x, чекбоксы эмулятора — `[ ]` TODO.
+- Добавлены в репозиторий **аналитика для конкурса «100 идей для Беларуси»**: `analysis/economics_model.py` + `docs/ECONOMICS.md` (см. раздел 10).
+
+### 0.6. Осталось сделать (см. также раздел 6)
+
+1. **Автотесты в репозитории** — `backend/tests/` на pytest (сейчас проверки — внешние smoke/emergency-скрипты в `/tmp/opencode/`; их нужно перенести в репозиторий и формализовать).
+2. **Unity: детекция спецтранспорта** (классы YOLO 2,3,5,7) — бэкенд-каскад уже не зависит от этого, но корректный триггер со стороны камер не реализован.
+3. **Rename файла** `Scene/.../TraddicLightViewer.cs` → `TrafficLightViewer.cs` (опечатка в имени, правится в Unity на Windows).
+4. **Green Wave**: нелинейные коридоры, реальная скорость потока, динамический `cycle_time` (упомянуто в 4.2 и 6.1).
+5. **Прогнозная аналитика** (`backend/services/predictor.py`) и **Ramp Metering** (`ramp_metering.py`) — из задела «как в Дубае».
+6. Косметика: `delta_time`/константы по фазовым длительностям в orchestrator (8.0, 25.0, 10.0, 15.0) вынести в константы.
 
 ---
 
@@ -48,60 +115,61 @@
 
 #### 2.1.1. `main.py` — Точка входа
 - **Статус:** ✅ Работает
-- **Порт:** 8050
+- **Порт:** 8050 (env: `BACKEND_HOST`/`BACKEND_PORT`, `.env` через `load_dotenv`)
 - **Эндпоинты:**
-  - `POST /api/v1/telemetry` — одиночная телеметрия с камеры
   - `POST /api/v1/telemetry/batch` — **batch-телеметрия** (все камеры перекрёстка в 1 POST)
   - `GET /api/v1/state` — полное состояние системы
+  - `GET /api/v1/congestion-map` — карта загруженности полос
+  - `GET /api/v1/statistics` — статистика трафика
+  - `GET /api/v1/statistics/{lane_id}` — история загрузки полосы (trend+history, исправлено в ревизии 13.10)
   - `WS /ws/monitor` — WebSocket для UI
+- **Запуск:** `uvicorn.run("backend.main:app", ...)` (ранее `"main:app"` — не импортировался)
 - **Зависимости:** FastAPI, Uvicorn, Pydantic
 
 #### 2.1.2. `models/traffic.py` — DTO модели
 - **Статус:** ✅ Работает
 - **Структуры:**
   - `LaneDetectionDTO` — данные с одной полосы (lane_id, car_count, avg_speed, max_capacity)
-  - `IntersectionUpdateDTO` — телеметрия от одной камеры
-  - `CameraTelemetryDTO` — телеметрия камеры внутри batch
+  - `CameraTelemetryDTO` — телеметрия камеры внутри batch (с метаданными для Camera-First)
   - `BatchTelemetryDTO` — batch от всех камер перекрёстка
   - `SingleResponseDTO` / `BatchResponseDTO` — ответы
 
 #### 2.1.3. `core/road_config.py` — Конфигурация дорожной сети
-- **Статус:** ✅ Работает (но ограничен)
-- **Перекрёстки:** 3 шт. (intersection_1, intersection_2, intersection_3)
+- **Статус:** ✅ Работает (основная топология строится из телеметрии — Camera-First)
+- **Дейфолт-набор (DEFAULT_NETWORK):** 4 перекрёстка (intersection_1, intersection_2, intersection_3X, intersection_3Z)
   - intersection_1: T-образный
-  - intersection_2, intersection_3: X-образные
-- **Фазы:** NS (север-юг) и EW (восток-запад)
-- **Связи:** 4 линка между перекрёстками (линейный коридор)
-- **Ограничение:** Конфигурация статична, не масштабируется под реальную карту
+  - intersection_2, intersection_3X, intersection_3Z: X-образные
+- **Фазы:** NS (север-юг) и EW (восток-запад), генерируются динамически из подходов
+- **Связи:** 5 линков между перекрёстками (коридор)
+- **Расширяемость:** при наличии `road_network.json` рядом с модулем он переопределяет встроенный набор
 
 #### 2.1.4. `services/orchestrator.py` — Главный оркестратор
 - **Статус:** ✅ Работает
 - **Функции:**
-  - `handle_telemetry()` — обработка одиночной телеметрии (per-lane режим)
   - `handle_batch_telemetry()` — **основной метод**: batch-обработка
-    1. Обновление lane_pool от всех камер
-    2. Получение команд зелёной волны
-    3. Принятие решения о фазе через PhaseManager
-    4. Расчёт длительности зелёного (8-25с, адаптивно)
-    5. Формирование ответов + broadcast в WebSocket
+1. Регистрация камер (Camera-First Design, **батч: O(C²) на батч** — одна перестройка топологии, см. раздел 0.2)
+  2. Обновление lane_pool от всех камер
+  3. Получение команд зелёной волны
+  4. Принятие решения о фазе через PhaseManager
+  5. Расчёт длительности зелёного (8-25с, адаптивно)
+  6. Запись статистики + формирование ответов + broadcast в WebSocket
 - **Логика переключения фаз:**
   - Если машин нет на активной фазе → переключение
   - Если превышен max_duration → переключение
   - Green Wave override приоритетнее
 
-#### 2.1.5. `services/traffic_brain.py` — Адаптивный мозг светофора
-- **Статус:** ✅ Работает (per-lane режим)
-- **Функции:**
-  - `process_lane_telemetry()` — решает GREEN/RED для конкретного подхода
-  - Адаптивная длительность зелёного на основе congestion_ratio
-  - `apply_cascade_command()` — урезание/продление зелёного по командам Cloud
-- **Важно:** Фазу НЕ переключает — только проверяет активность своей фазы
+#### 2.1.5. `services/traffic_brain.py` — Per-lane адаптивный мозг
+- **Статус:** ❌ Удалён (рефакторинг)
+- Per-lane режим убран: единый алгоритм принятия решений — batch через `PhaseManager`. `traffic_brain.py` удалён как dead code.
 
 #### 2.1.6. `services/graph_manager.py` — Граф дорожной сети
 - **Статус:** ✅ Работает
 - **Технология:** NetworkX (DiGraph)
 - **Функции:**
-  - Построение графа из ROADS
+  - Динамическое построение графа из телеметрии камер (Camera-First)
+  - `register_cameras()` — батч-регистрация с **одной** перестройкой графа (O(C²), см. 0.2); `register_camera()` — публичный API (метаданные + перестроение)
+  - `_build_edges_from_cameras()` — чистит граф перед перестройкой (нет накопления устаревших рёбер)
+  - `get_approach_toward()` — подход на перекрёстке к заданному (intersection, approach) по ребру графа (для emergency-каскада, см. 0.3)
   - `update_lane_state()` — обновление состояния полосы
   - `get_congestion_for_phase()` — средняя загруженность фазы
   - `get_upstream_intersections()` / `get_downstream_intersections()` — кэшированная топология
@@ -167,7 +235,7 @@
   - Автоопределение ID перекрёстка из имени GameObject
   - Поддержка X и Z осей камер
 
-#### 2.2.3. `LightController.cs` (IntersectionManager) — Контроллер светофоров
+#### 2.2.3. `IntersectionManager.cs` (бывш. LightController) — Контроллер светофоров
 - **Статус:** ✅ Работает
 - **Функции:**
   - Автономный цикл фаз (Z_Green → Yellow → X_Green → Yellow)
@@ -233,7 +301,7 @@
 |------------------------|-----------------|-------------|
 | **Ramp Metering** (контроль въезда на магистраль) | ❌ Нет | Проект фокусируется на перекрёстках, не на рампах. Можно добавить как отдельный модуль |
 | **AI-анализ трафика в реальном времени** | ✅ Есть | YOLO детекция + адаптивные фазы |
-| **Адаптивное управление сигналами** | ✅ Есть | PhaseManager + TrafficBrain + Orchestrator |
+| **Адаптивное управление сигналами** | ✅ Есть | PhaseManager + Orchestrator |
 | **Центральная система управления** | ✅ Есть | CloudOrchestrator + WebSocket |
 | **Green Wave координация** | ✅ Есть (базовая) | GreenWaveCoordinator с линейными коридорами |
 | **Каскадное управление** | ✅ Есть | CloudOrchestrator.calculate_cascade() |
@@ -249,7 +317,7 @@
 
 1. **Ramp Metering vs Intersection Control:** Проект ориентирован на перекрёстки, а система Абу-Даби — на ramp metering (контроль въезда на магистраль). Это разные, но дополняющие концепции.
 
-2. **Масштаб:** В проекте 3 перекрёстка, в реальной системе — сотни.
+2. **Масштаб:** В проекте 4 перекрёстка (DEFAULT_NETWORK), в реальной системе — сотни.
 
 3. **Прогнозирование:** В проекте нет ML-моделей для прогноза трафика, только реактивная адаптация.
 
@@ -272,35 +340,25 @@
 - **Digital Twin** — полная симуляция в Unity с YOLO детекцией
 
 ### 4.2. Слабые стороны / Проблемы
-1. **Дублирование состояния фаз:**
-   - `_intersection_phase_state` в `traffic_brain.py` (глобальный словарь)
-   - `PhaseManager` в `orchestrator.py`
-   - Код в `orchestrator.py` (строки 55-61) синхронизирует их, что костыль
-
-2. **Per-lane режим не используется:**
-   - `handle_telemetry()` (одиночный) редко вызывается
-   - Основной поток — `handle_batch_telemetry()`, который не использует `AdaptiveTrafficBrain`
-   - `traffic_brain.py` фактически мёртвый код для batch-режима
-
-3. **Статичная конфигурация:**
-   - `road_config.py` — жёстко заданные 3 перекрёстка
-   - Нет динамического добавления/удаления перекрёстков
-   - Нет загрузки из файла/БД
+1. ~~Дублирование состояния фаз~~ — устранено: `PhaseManager` — единый источник истины
+2. ~~Per-lane режим~~ — убран: `traffic_brain.py` удалён, основной поток — batch-обработка
+3. **Статичная конфигурация (частично решена):**
+   - `road_config.py` поддерживает внешнюю конфигурацию `road_network.json`
+   - Основная топология строится динамически из телеметрии (Camera-First)
 
 4. **Green Wave упрощена:**
    - Только линейные коридоры
    - Не учитывает реальную скорость потока
    - Offset рассчитывается от статичных позиций
 
-5. **Приоритет спецтранспорта (базовая реализация):**
-   - Emergency-режим реализован (мгновенное зелёное на фазе)
-   - Детекция через Physics.OverlapSphere работает
-   - Классы 2,3,5,7 YOLO можно добавить для улучшения детекции
+5. **Приоритет спецтранспорта (backend готов, остался trigger в Unity):**
+   - Backend: emergency-детектор (`core/emergency.py`) → `cloud.report_emergency()` → каскад «зелёный коридор» на upstream-перекрёстки с **точным подходом** по графу (пофиксено 13.10, см. 0.3)
+   - Unity: детекция классов 2,3,5,7 YOLO/Physics.OverlapSphere — TODO
 
-6. **Отсутствие тестов:**
-   - Нет unit-тестов
-   - Нет integration-тестов
-   - Нет нагрузочного тестирования
+6. **Тесты есть только внешние (вне репозитория):**
+   - Smoke-проверки бэкенда (endpoints, дедуп статистики, road_config) — `/tmp/opencode/smoke_test.py` (18/18 PASS)
+   - Emergency-каскад — `/tmp/opencode/emergency_test.py` (10/10 PASS)
+   - Нет unit-/integration-тестов **внутри репозитория** (`backend/tests/`) — приоритет №1 из раздела 0.6
 
 7. **Flet UI ограничен:**
     - Нет графиков аналитики
@@ -312,41 +370,53 @@
 ## 5. СТРУКТУРА ПРОЕКТА (ПОЛНАЯ)
 
 ```
-D:/Education/Diplom/
+intelligent-traffic-control-system/
 ├── backend/
 │   ├── __init__.py
 │   ├── main.py                          # FastAPI сервер (точка входа)
 │   ├── core/
-│   │   └── road_config.py               # Конфигурация дорожной сети
+│   │   ├── road_config.py               # Конфигурация дорожной сети
+│   │   ├── logger.py                    # Централизованное логирование
+│   │   ├── lane_utils.py                # Утилиты для lane_id
+│   │   └── emergency.py                 # Детекция спецтранспорта
 │   ├── models/
 │   │   └── traffic.py                   # Pydantic DTO модели
 │   ├── services/
 │   │   ├── orchestrator.py              # Fog-оркестратор
-│   │   ├── traffic_brain.py             # Per-lane адаптивный мозг
 │   │   ├── graph_manager.py             # NetworkX граф дорожной сети
 │   │   ├── cloud_orchestrator.py        # Cloud-уровень (тикер 1с)
 │   │   ├── green_wave.py                # Координатор зелёной волны
 │   │   ├── phase_manager.py             # Единый менеджер фаз
 │   │   └── statistics.py                # Сбор статистики (время ожидания, нагруженность)
 │   └── UI/
-│       └── admin_panel.py               # Flet админ-панель
+│       ├── admin_panel.py               # Flet админ-панель
+│       └── ui/
+│           ├── map.py                   # TrafficMap - визуализация графа
+│           └── panels.py                # TrafficUIFactory - панели
 ├── Scene/
 │   └── Diplom_scene/
 │       └── Assets/
 │           └── Scripts/
 │               ├── EdgeVisionCamera.cs          # YOLO камера
 │               ├── IntersectionVisionManager.cs # Менеджер зрения
-│               ├── LightController.cs           # Контроллер светофоров
+│               ├── IntersectionManager.cs       # Контроллер светофоров
 │               ├── TrafficGenerator.cs          # Генератор трафика
 │               ├── WaypointNavigator.cs         # Навигатор машин
 │               ├── WaypointNode.cs              # Узел waypoint
 │               ├── IntersectionRightOfWay.cs    # Правило правой руки
 │               ├── TraddicLightViewer.cs        # Визуализация светофора
+│               ├── TrafficConstraintsManager.cs # Ограничения трафика
+│               ├── Logger.cs                    # Unity логгер
 │               └── CarCleanupHandler.cs         # Очистка машин
+├── analysis/
+│   └── economics_model.py                # Экономическая модель (конкурс «100 идей», см. docs/ECONOMICS.md)
+├── docs/
+│   └── ECONOMICS.md                      # Расчёт NPV/IRR, варианты пилота
 ├── PROJECT_STATE.md                     # Данный файл
 ├── README.md                            # Описание проекта
 ├── pyproject.toml                       # Python зависимости
 ├── .python-version                      # Версия Python
+├── .env.example                         # Шаблон переменных окружения
 └── .gitignore
 ```
 
@@ -358,22 +428,14 @@ D:/Education/Diplom/
 
 #### 🔴 КРИТИЧЕСКИЕ (баги / архитектурные проблемы)
 
-1. **Устранить дублирование состояния фаз**
-   - Файлы: `backend/services/traffic_brain.py` (строки 10-21), `backend/services/orchestrator.py` (строки 55-61)
-   - Задача: Удалить `_intersection_phase_state` из `traffic_brain.py`, перевести `AdaptiveTrafficBrain` на использование `PhaseManager`
-   - Риск: Рассогласование фаз между per-lane и batch режимами
-
-2. **Рефакторинг per-lane vs batch**
-   - Файл: `backend/services/orchestrator.py`
-   - Задача: `handle_telemetry()` (per-lane) использует `AdaptiveTrafficBrain`, а `handle_batch_telemetry()` — нет. Нужно унифицировать или явно разделить.
-   - Риск: Два разных алгоритма принятия решений
+1. ~~Устранить дублирование состояния фаз~~ — **выполнено:** `traffic_brain.py` удалён, `PhaseManager` — единый источник истины о фазах
+2. ~~Рефакторинг per-lane vs batch~~ — **выполнено:** per-lane режим убран, основной поток — `handle_batch_telemetry()` через `PhaseManager`
 
 #### 🟡 ВАЖНЫЕ (функциональные пробелы)
 
-3. **Приоритет спецтранспорта**
-   - Файлы: `Scene/Diplom_scene/Assets/Scripts/EdgeVisionCamera.cs` (строка 28), `backend/services/orchestrator.py`
-   - Задача: Реализовать детекцию спецтранспорта (классы 2,3,5,7 YOLO) и "зелёный коридор"
-   - Ссылка: README.md Этап 3
+3. ~~Приоритет спецтранспорта (backend)~~ — **выполнено (13.10):** EmergencyDetector → cloud-каскад «зелёный коридор» с точным upstream-подходом (раздел 0.3).
+   - Осталось (Unity): детекция спецтранспорта классами 2,3,5,7 YOLO (`EdgeVisionCamera.cs` / `IntersectionVisionManager.cs`) и передача `is_emergency` в batch
+   - Backend приём: `backend/core/emergency.py` → `orchestrator.handle_batch_telemetry()` → `cloud.report_emergency()`
 
 4. **Ramp Metering модуль**
    - Новый файл: `backend/services/ramp_metering.py`
@@ -385,32 +447,41 @@ D:/Education/Diplom/
    - Задача: ML-модель для прогноза загрузки на 5-15 минут вперёд
    - Данные: История lane_pool, время суток, день недели
 
+6. **Rename `TraddicLightViewer.cs` → `TrafficLightViewer.cs`** (Unity, правка на Windows)
+   - Файл: `Scene/Diplom_scene/Assets/Scripts/TraddicLightViewer.cs`
+   - Опечатка в имени класса/файла; поменять имя класса, имя файла и Age-ссылку в сцене
+
 #### 🟢 УЛУЧШЕНИЯ (качество / тестирование)
 
-6. **Unit-тесты**
+7. **Unit-тесты в репозитории**
    - Новые файлы: `backend/tests/`
-   - Задача: Написать тесты для PhaseManager, GreenWaveCoordinator, TrafficOrchestrator
-   - Инструмент: pytest
+   - Задача: Перенести и формализовать smoke (`/tmp/opencode/smoke_test.py`) и emergency (`/tmp/opencode/emergency_test.py`) в pytest; добавить тесты PhaseManager, GreenWaveCoordinator, TrafficOrchestrator
+   - Инструмент: pytest (dev-зависимость установлена)
 
-7. **Динамическая конфигурация**
+8. **Динамическая конфигурация**
    - Файл: `backend/core/road_config.py`
    - Задача: Загрузка конфигурации из JSON/YAML файла вместо жёстко заданных данных
-   - Формат: GeoJSON для совместимости с картами
+   - Формат: GeoJSON для совместимости с картами (задел уже есть: `road_network.json` переопределяет встроенный набор)
 
-8. **Green Wave улучшение**
+9. **Green Wave улучшение**
    - Файл: `backend/services/green_wave.py`
    - Задача: Поддержка нелинейных коридоров, учёт реальной скорости потока, динамический cycle_time
 
-9. **Сравнение с фиксированным таймером**
-   - Файл: `backend/UI/admin_panel.py`
-   - Задача: Добавить графики сравнения эффективности (среднее время ожидания, пропускная способность)
-   - Ссылка: README.md Этап 5
+10. **Сравнение с фиксированным таймером**
+    - Файл: `backend/UI/admin_panel.py`
+    - Задача: Добавить графики сравнения эффективности (среднее время ожидания, пропускная способность)
+    - Ссылка: README.md Этап 5
 
 ### 6.2. Как запустить проект
 
 ```bash
+# 0. Установка зависимостей (Python >= 3.13; проверено на 3.14.7)
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e ".[dev]" httpx  # работает — pyproject починен (см. 0.5)
+
 # 1. Запуск бэкенда
-cd D:/Education/Diplom
+cd intelligent-traffic-control-system
 python -m backend.main
 
 # 2. Запуск админ-панели (отдельный терминал)
@@ -424,9 +495,11 @@ python -m backend.UI.admin_panel
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| POST | `/api/v1/telemetry` | Одиночная телеметрия с камеры |
 | POST | `/api/v1/telemetry/batch` | Batch-телеметрия (все камеры перекрёстка) |
 | GET | `/api/v1/state` | Полное состояние системы |
+| GET | `/api/v1/congestion-map` | Карта загруженности полос |
+| GET | `/api/v1/statistics` | Статистика трафика |
+| GET | `/api/v1/statistics/{lane_id}` | История загрузки полосы (timeseries + trend) |
 | WS | `/ws/monitor` | WebSocket для real-time мониторинга |
 
 ### 6.4. Формат batch-запроса
@@ -471,14 +544,20 @@ python -m backend.UI.admin_panel
 
 | Проблема | Где | Серьёзность |
 |----------|-----|-------------|
-| Дублирование состояния фаз | traffic_brain.py / orchestrator.py | HIGH |
-| Per-lane код не используется | traffic_brain.py | MEDIUM |
+| ~~Дублирование состояния фаз~~ (решено) | PhaseManager — единый источник | HIGH |
+| ~~Per-lane код~~ (удалён) | traffic_brain.py удалён | MEDIUM |
+| ~~Построчный register_camera (O(C³))~~ (решено 13.10) | graph_manager.register_cameras — O(C²) | MEDIUM |
+| ~~Накопление устаревших рёбер графа~~ (решено 13.10) | graph.clear() в _build_edges_from_cameras | MEDIUM |
+| ~~Дубль снапшотов загрузки~~ (решено 13.10) | только fog-оркестратор пишет snapshot | MEDIUM |
+| ~~Сломанный /statistics/{lane_id}~~ (решено 13.10) | get_intersection_timeseries + parse_lane_id | HIGH |
+| ~~Каскад emergency по первому подходу~~ (решено 13.10) | get_approach_toward по графу | HIGH |
+| Нет unit-тестов в репозитории | backend/tests/ — TODO (см. 6.1 #7) | MEDIUM |
 | Нет обработки ошибок в batch | orchestrator.py handle_batch_telemetry | MEDIUM |
 | Жёстко заданные константы | green_wave.py (CYCLE_TIME, GREEN_WINDOW) | LOW |
+| Магические числа в фазах | orchestrator.py (8.0, 25.0, 10.0, 15.0) | LOW |
 | Нет graceful shutdown | cloud_orchestrator.py | LOW |
 | Flet UI не обновляется при ошибках | admin_panel.py | LOW |
 | Нет валидации конфигурации | road_config.py | MEDIUM |
-| Магические числа в фазах | orchestrator.py (8.0, 25.0, 10.0, 15.0) | LOW |
 
 ---
 
@@ -574,7 +653,7 @@ LOG_LEVEL=OFF python -m backend.main
 - При успешном ответе: счётчик сбрасывается
 
 **Файлы:**
-- `Scene/Diplom_scene/Assets/Scripts/LightController.cs` - `OnBackendResponseSuccess/Failed()`, `FallbackCheckRoutine()`
+- `Scene/Diplom_scene/Assets/Scripts/IntersectionManager.cs` - `OnBackendResponseSuccess/Failed()`, `FallbackCheckRoutine()`
 - `Scene/Diplom_scene/Assets/Scripts/IntersectionVisionManager.cs` - вызов fallback-методов
 
 ### 9.4. Удалён граф из admin_panel
@@ -612,3 +691,16 @@ Logger.LogError("IntersectionVisionManager", $"Batch request failed: {request.er
 **Настройка в Unity:**
 - Через PlayerPrefs: `PlayerPrefs.SetString("LOG_LEVEL", "DEBUG")`
 - Или в коде: `Logger.SetLogLevel(Logger.LogLevel.DEBUG)`
+
+---
+
+## 10. ЭКОНОМИЧЕСКАЯ МОДЕЛЬ (конкурс «100 идей для Беларуси»)
+
+Файлы: `analysis/economics_model.py` (скрипт расчёта), `docs/ECONOMICS.md` (объяснение и расчёты).
+
+Ключевые результаты (подробно — в `docs/ECONOMICS.md`):
+- **Запрашиваемый грант:** 78 775 BYN (≈ 25 900 USD) — вариант с нулевой ставкой дисконтирования (8-летний горизонт для города).
+- **Городская перспектива (пилот 1):** NPV = +67 609 BYN, 5 лет, ставка 9.5%.
+- **Вендорская перспектива (тираж 100 шт):** NPV = +297 903 BYN, IRR = 69.2% (не 219% — ошибка/опечатка прежней версии модели).
+- **Точки безубыточности (относительно движения):** городская модель — безубыточен от 18.2% эффекта; вендорская — уже безубыточен базово.
+- Скрипт читается и исполняется как модуль: `python -m analysis.economics_model`.

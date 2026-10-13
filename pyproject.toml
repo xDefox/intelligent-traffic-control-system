@@ -22,7 +22,10 @@ dev = [
 ]
 
 [project.scripts]
-diplom = "main:app"
+diplom = "backend.main:app"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
 
 [tool.uvicorn]
 host = "127.0.0.1"

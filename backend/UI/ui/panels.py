@@ -2,12 +2,16 @@ import flet as ft
 import flet.canvas as cv
 import asyncio
 import json
+import os
 import time
 import websockets
 import traceback
-from backend.core.logger import debug, info, warning, error
+from dotenv import load_dotenv
+from backend.core.logger import debug, error
 from backend.core.lane_utils import denormalize_lane_id
 from backend.UI.ui.map import TrafficMap
+
+load_dotenv()
 
 
 class TrafficUIFactory:
@@ -95,7 +99,7 @@ class TrafficUIFactory:
         self.congestion_canvas = cv.Canvas(width=680, height=200)
         self.congestion_canvas_container = ft.Container(
             content=ft.Column([
-                ft.Text("📈 Congestion time series (5 мин)", size=16, weight=ft.FontWeight.BOLD),
+                ft.Text("📊 Загрузка перекрёстков (рейтинг)", size=16, weight=ft.FontWeight.BOLD),
                 self.congestion_canvas,
             ]),
             bgcolor="#1e1e2e", padding=15, border_radius=10,
@@ -457,7 +461,7 @@ class TrafficUIFactory:
 
         chart_controls = []
         chart_controls.append(
-            ft.Text("📈 Congestion time series (5 мин)", size=16, weight=ft.FontWeight.BOLD)
+            ft.Text("📊 Загрузка перекрёстков (рейтинг)", size=16, weight=ft.FontWeight.BOLD)
         )
 
         if not ranking:
@@ -487,7 +491,7 @@ class TrafficUIFactory:
         self.congestion_canvas_container.content = ft.Column(chart_controls, spacing=6)
 
     async def connect_to_backend(self):
-        uri = "ws://127.0.0.1:8050/ws/monitor"
+        uri = f"ws://{os.getenv('WS_HOST', '127.0.0.1')}:{os.getenv('WS_PORT', '8050')}/ws/monitor"
         while True:
             try:
                 async with websockets.connect(uri) as websocket:
@@ -519,7 +523,7 @@ class TrafficUIFactory:
                                     self._pending_lane_updates.append(lane_update)
                             elif msg_type == "lane_update":
                                 self._pending_lane_updates.append(data)
-                        except Exception as e:
+                        except Exception:
                             if self.page and self.page.update:
                                 pass  # Игнорируем битые сообщения
 

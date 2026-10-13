@@ -2,8 +2,7 @@
 PhaseManager — единый источник истины о фазах светофоров.
 
 Заменяет:
-- _intersection_phase_state в traffic_brain.py (глобальный словарь)
-- self._intersection_phase_states в orchestrator.py (внутренний словарь)
+- _intersection_phase_state в orchestrator.py (внутренний словарь, удалён)
 
 Теперь состояние фаз хранится в одном месте и доступно через dependency injection.
 """

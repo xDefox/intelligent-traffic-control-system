@@ -92,20 +92,6 @@ class CityTrafficGraph:
 
     # ===================== ПОСТРОЕНИЕ ТОПОЛОГИИ =====================
 
-    def _build_static_topology(self):
-        """Построить статический граф связей из конфига (физическая топология)."""
-        self.graph.clear()
-        for src, dst in _parse_links():
-            src_inter, src_app = parse_lane_id(src)
-            dst_inter, dst_app = parse_lane_id(dst)
-            self.graph.add_node((src_inter, src_app))
-            self.graph.add_node((dst_inter, dst_app))
-            self.graph.add_edge(
-                (src_inter, src_app), (dst_inter, dst_app),
-                lane_id=src, connected=True,
-            )
-        self._precompute_topology_cache()
-
     def _build_from_telemetry(self):
         """Построить граф из зарегистрированных камер (пустой старт)."""
         self.graph.clear()
@@ -113,10 +99,23 @@ class CityTrafficGraph:
         self._build_edges_from_cameras()
         self._precompute_topology_cache()
 
+    def _register_camera_metadata(self, camera_data: dict):
+        """Зарегистрировать/обновить метаданные камеры без перестройки графа (O(1))."""
+        camera_id = camera_data.get("camera_id")
+        if not camera_id:
+            return
+
+        self.camera_registry[camera_id] = {
+            "intersection_id": camera_data.get("intersection_id"),
+            "direction": camera_data.get("direction"),
+            "position": camera_data.get("world_position"),
+            "rotation": camera_data.get("world_rotation"),
+        }
+
     def register_camera(self, camera_data: dict):
         """
-        Camera-First Design: зарегистрировать камеру с метаданными.
-        
+        Camera-First Design: зарегистрировать ОДНУ камеру и перестроить топологию.
+
         Args:
             camera_data: {
                 "camera_id": "intersection_1_approach_0",
@@ -126,19 +125,22 @@ class CityTrafficGraph:
                 "world_rotation": {"x": 0, "y": 90, "z": 0}
             }
         """
-        camera_id = camera_data.get("camera_id")
-        if not camera_id:
-            return
-        
-        # Сохраняем метаданные камеры
-        self.camera_registry[camera_id] = {
-            "intersection_id": camera_data.get("intersection_id"),
-            "direction": camera_data.get("direction"),
-            "position": camera_data.get("world_position"),
-            "rotation": camera_data.get("world_rotation"),
-        }
-        
-        # Перестраиваем граф (топология может измениться)
+        self._register_camera_metadata(camera_data)
+        self.rebuild_topology()
+
+    def register_cameras(self, cameras: List[dict]):
+        """
+        Зарегистрировать несколько камер за один вызов и перестроить граф ОДИН раз.
+
+        Сложность: O(C²) на батч (одна полная перестройка связей) вместо O(C³),
+        если бы топология пересчитывалась после каждой камеры.
+        """
+        for cam_data in cameras:
+            self._register_camera_metadata(cam_data)
+        self.rebuild_topology()
+
+    def rebuild_topology(self):
+        """Перестроить граф и кэш топологии из всех зарегистрированных камер."""
         self._build_edges_from_cameras()
         self._precompute_topology_cache()
 
@@ -150,6 +152,10 @@ class CityTrafficGraph:
         - Камера A смотрит на E (восток), камера B смотрит на W (запад)
         - Если расстояние между ними < 200м → они соединены дорогой
         """
+        # Полная детерминированная перестройка из реестра камер: чистим граф,
+        # чтобы не копились устаревшие рёбра при смене метаданных камер.
+        self.graph.clear()
+
         # Группируем камеры по перекрёсткам
         cameras_by_inter: Dict[str, List[dict]] = {}
         for cam_id, cam_data in self.camera_registry.items():
@@ -359,8 +365,8 @@ class CityTrafficGraph:
     def _precompute_topology_cache(self):
         """
         Предвычислить upstream/downstream для всех перекрёстков на основе
-        статического графа связей. Топология графа не меняется в рантайме,
-        поэтому кэш считается один раз в _build_static_topology().
+        текущего графа связей. Кэш пересчитывается при каждом построении графа
+        (в начале работы и при регистрации новых камер).
         """
         self._upstream_cache.clear()
         self._downstream_cache.clear()
@@ -388,6 +394,20 @@ class CityTrafficGraph:
     def get_upstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
         """Для каждого подхода перекрёстка найти upstream перекрёстки."""
         return self._upstream_cache.get(intersection_id, {}).copy()
+
+    def get_approach_toward(self, source_inter: str, target_inter: str,
+                            target_approach: str) -> Optional[str]:
+        """
+        Найти подход на source_inter, который соединён дорогой с
+        (target_inter, target_approach) — т.е. подход, с которого приезжают к цели.
+
+        Сложность: O(indegree(target)) — только входящие рёбра целевого узла.
+        """
+        target_node = (target_inter, target_approach)
+        for u, v, _ in self.graph.in_edges(target_node, data=True):
+            if u[0] == source_inter:
+                return u[1]
+        return None
 
     def get_downstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
         """Для каждого подхода найти downstream перекрёстки."""

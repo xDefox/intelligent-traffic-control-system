@@ -1,11 +1,16 @@
 # backend/main.py
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from backend.models.traffic import BatchTelemetryDTO, BatchResponseDTO, SingleResponseDTO
+from backend.models.traffic import BatchTelemetryDTO, BatchResponseDTO
 from backend.services.orchestrator import TrafficOrchestrator
 from backend.services.cloud_orchestrator import CloudOrchestrator
 
-app = FastAPI(title="Smart Crossroads UTC-UX Distributed Network", version="0.6.0")
+app = FastAPI(title="Smart Crossroads UTC-UX Distributed Network", version="0.7.0")
 
 
 class ConnectionManager:
@@ -113,20 +118,31 @@ async def get_statistics():
 
 
 @app.get("/api/v1/statistics/{lane_id}")
-async def get_lane_statistics(lane_id: str, limit: int = 50):
+async def get_lane_statistics(lane_id: str, seconds: int = 300, limit: int = 50):
     """
-    Получить исторические данные для конкретной полосы.
-    
+    Получить исторические данные для полосы (time series загрузки её перекрёстка).
+
     Args:
         lane_id: ID полосы (например, "lane_intersection_1_approach_0")
+        seconds: окно истории (по умолчанию 300)
         limit: количество записей (по умолчанию 50)
     """
+    from backend.core.lane_utils import parse_lane_id
     from backend.services.statistics import traffic_stats
+    inter_id, _ = parse_lane_id(lane_id)
+    intersection_id = inter_id if inter_id != "unknown" else lane_id
+    history = traffic_stats.get_intersection_timeseries(intersection_id, seconds)
     return {
         "lane_id": lane_id,
-        "history": traffic_stats.get_lane_history(lane_id, limit),
+        "intersection_id": intersection_id,
+        "history": history[:limit],
     }
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8050, reload=True)
+    uvicorn.run(
+        "backend.main:app",
+        host=os.getenv("BACKEND_HOST", "127.0.0.1"),
+        port=int(os.getenv("BACKEND_PORT", "8050")),
+        reload=True,
+    )

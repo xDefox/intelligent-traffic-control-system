@@ -177,9 +177,7 @@ class TrafficMap:
             self._phases[inter_id] = phase
 
     def update_cloud_state(self, data: dict):
-        changed = False
         for inter_id, summary in data.get("intersections_summary", {}).items():
             congestion = summary.get("avg_congestion", 0)
             if self._congestion.get(inter_id) != congestion:
                 self._congestion[inter_id] = congestion
-                changed = True

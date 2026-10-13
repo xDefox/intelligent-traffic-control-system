@@ -34,7 +34,7 @@ DEFAULT_NETWORK = {
     "links": [
         "lane_intersection_1_approach_1 -> lane_intersection_2_approach_0",
         "lane_intersection_2_approach_1 -> lane_intersection_1_approach_0",
-        "lane_intersection_2_approach_1 -> lane_intersection_3_approach_0",
+        "lane_intersection_2_approach_1 -> lane_intersection_3X_approach_0",
         "lane_intersection_3X_approach_1 -> lane_intersection_2_approach_0",
         "lane_intersection_3Z_approach_2 -> lane_intersection_2_approach_3",
     ],

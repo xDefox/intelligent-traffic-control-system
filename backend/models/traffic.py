@@ -10,12 +10,6 @@ class LaneDetectionDTO(BaseModel):
     max_capacity: int = Field(default=10, ge=1, description="Сколько машин помещается в кадре этой камеры")
 
 
-class IntersectionUpdateDTO(BaseModel):
-    intersection_id: str # ID перекрестка (Fog узел)
-    camera_id: str       # ID конкретной камеры
-    lanes: List[LaneDetectionDTO]
-
-
 class CameraTelemetryDTO(BaseModel):
     """Телеметрия от одной камеры внутри batch-запроса"""
     camera_id: str

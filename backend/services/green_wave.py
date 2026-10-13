@@ -10,7 +10,7 @@ Green Wave (Зелёный поток) система координации с�
 
 import math
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from backend.services.graph_manager import traffic_network
 
 

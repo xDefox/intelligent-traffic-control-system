@@ -7,7 +7,7 @@
 Формат lane_id: "lane_intersection_1_approach_0" или "intersection_1_approach_0"
 """
 
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 def normalize_lane_id(lane_id: str) -> str:
