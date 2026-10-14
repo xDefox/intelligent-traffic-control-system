@@ -393,7 +393,7 @@ class TrafficUIFactory:
             cascade_str = f" → {len(ev.get('cascade', []))} upstream" if ev.get("cascade") else ""
             ev_card = ft.Container(
                 content=ft.Row([
-                    ft.Text(f"🚨", size=16),
+                    ft.Text("🚨", size=16),
                     ft.Text(f"[{ev_time}]", size=11, color="grey"),
                     ft.Text(f"{ev['intersection_id']}/{ev['approach']}", size=13, weight=ft.FontWeight.BOLD,
                             expand=True),
@@ -416,7 +416,7 @@ class TrafficUIFactory:
             corridor_str = " → ".join(gw.get("corridor", []))
             gw_card = ft.Container(
                 content=ft.Row([
-                    ft.Text(f"🟢", size=16),
+                    ft.Text("🟢", size=16),
                     ft.Text(f"[{gw_time}]", size=11, color="grey"),
                     ft.Text(f"{corridor_str}", size=13, weight=ft.FontWeight.BOLD, expand=True),
                     ft.Text(f"phase: {gw['phase']}", size=12, color="yellow"),
