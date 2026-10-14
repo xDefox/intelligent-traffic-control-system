@@ -5,9 +5,12 @@ from typing import List, Optional
 
 class LaneDetectionDTO(BaseModel):
     lane_id: str         # "intersection_1_approach_0"
-    car_count: int       # Количество машин в ROI
-    avg_speed: float     # Средняя скорость движения в зоне
-    max_capacity: int = Field(default=10, ge=1, description="Сколько машин помещается в кадре этой камеры")
+    car_count: int = Field(ge=0, description="Количество машин в ROI (не может быть отрицательным)")
+    avg_speed: float = Field(default=0.0, ge=0, description="Средняя скорость движения в зоне")
+    # ge=0, а не ge=1: если Unity пошлёт 0 (пустое поле в инспекторе) — не роняем
+    # весь batch в 422; бэкенд трактует 0 как «вместимость неизвестна» (см.
+    # graph_manager.update_lane_state → fallback на бегущий максимум).
+    max_capacity: int = Field(default=10, ge=0, description="Сколько машин помещается в кадре этой камеры")
 
 
 class CameraTelemetryDTO(BaseModel):

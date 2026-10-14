@@ -131,15 +131,17 @@ class CloudOrchestrator:
 
     def _process_green_wave(self, green_wave_commands: List[dict]):
         """Обработать команды зелёной волны: логирование в статистике при изменении состояния."""
-        current_gw_active = len([c for c in green_wave_commands if c.get("action") == "GREEN_WAVE_SYNC"]) > 0
+        gw_cmds = [c for c in green_wave_commands if c.get("action") == "GREEN_WAVE_SYNC"]
+        current_gw_active = len(gw_cmds) > 0
         if current_gw_active and not self._prev_green_wave_active:
-            # Волна началась
-            for wave in green_wave_commands:
-                if wave.get("action") == "GREEN_WAVE_SYNC":
-                    corridor = wave.get("corridor", [])
-                    gw_phase = wave.get("phase", "UNKNOWN")
-                    if corridor:
-                        traffic_stats.start_green_wave(corridor, gw_phase)
+            # Волна началась. Дедуп по коридору: команд в коридоре столько же,
+            # сколько перекрёстков, а событие волны должно быть одно.
+            seen_corridors = set()
+            for wave in gw_cmds:
+                corridor = tuple(wave.get("corridor", []))
+                if corridor and corridor not in seen_corridors:
+                    seen_corridors.add(corridor)
+                    traffic_stats.start_green_wave(list(corridor), wave.get("phase", "UNKNOWN"))
         elif not current_gw_active and self._prev_green_wave_active:
             # Волна закончилась
             traffic_stats.end_green_wave()
@@ -255,20 +257,28 @@ class CloudOrchestrator:
         if not self.ws_manager:
             return
         
-        # Подсчитываем активные зелёные волны
-        active_waves = [c for c in commands if c.get("action") == "GREEN_WAVE_SYNC"]
-        green_wave_active = len(active_waves) > 0
-        
+        # Подсчитываем активные зелёные волны (дедуп по коридору: в коридоре
+        # по одной GREEN_WAVE_SYNC-команде на перекрёсток).
+        seen_corridors = set()
+        unique_corridors = []
+        for c in commands:
+            if c.get("action") == "GREEN_WAVE_SYNC":
+                key = tuple(c.get("corridor", []))
+                if key and key not in seen_corridors:
+                    seen_corridors.add(key)
+                    unique_corridors.append(list(key))
+        green_wave_active = len(unique_corridors) > 0
+
         # Получаем статистику для UI (передаём через WebSocket, т.к. админка в другом процессе)
         stats_data = traffic_stats.get_full_statistics()
-        
+
         state_payload = {
             "type": "cloud_state",
             "total_cars_on_network": total_cars,
             "intersections_summary": inter_summary,
             "cascade_commands": commands,
             "green_wave_active": green_wave_active,
-            "green_wave_corridors": [c.get("corridor", []) for c in active_waves],
+            "green_wave_corridors": unique_corridors,
             "statistics": stats_data,  # Полная статистика для UI
         }
         await self.ws_manager.broadcast(json.dumps(state_payload))
@@ -276,22 +286,26 @@ class CloudOrchestrator:
     def _get_intersection_phase(self, intersection_id: str, commands: List[dict]) -> str:
         """
         Определить текущую фазу перекрёстка.
-        Сначала смотрит в cascade commands, потом в lane_pool.
+
+        Сначала lane_pool (фактическая фаза, которую опубликовал оркестратор),
+        потом cascade-команды. Раньше смотрели команды В ПЕРВУЮ очередь — из-за
+        этого команда зелёной волны «навязывала» фазу и счётчик переключений
+        дрожал на каждом тике.
         """
-        # Ищем в командах
-        for cmd in commands:
-            if cmd.get("target_intersection") == intersection_id:
-                phase = cmd.get("phase")
-                if phase:
-                    return phase
-        
-        # Ищем в lane_pool
+        # 1) Фактическая фаза из lane_pool
         for lane_id, data in traffic_network.lane_pool.items():
             if data["intersection_id"] == intersection_id:
                 phase = data.get("current_phase")
                 if phase:
                     return phase
-        
+
+        # 2) Fallback: фаза из команды
+        for cmd in commands:
+            if cmd.get("target_intersection") == intersection_id:
+                phase = cmd.get("phase")
+                if phase:
+                    return phase
+
         return "UNKNOWN"
 
     def get_cascade_commands(self) -> List[dict]:

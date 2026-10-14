@@ -50,15 +50,19 @@ class GreenWaveCoordinator:
             corridor_commands = self._calculate_corridor_sync(corridor)
             commands.extend(corridor_commands)
         
-        # Сохраняем активные волны
+        # Сохраняем активные волны.
+        # КЛЮЧ = коридор + перекрёсток: иначе все команды коридора пишутся в один
+        # ключ str(corridor) и перезаписывают друг друга — выживал только последний
+        # перекрёсток, а первый в коридоре никогда не получал синхронизацию.
         self._active_waves.clear()
         for cmd in commands:
-            corridor_key = str(cmd.get("corridor", []))
+            inter_id = cmd.get("target_intersection", "")
+            corridor_key = f"{cmd.get('corridor', [])}::{inter_id}"
             self._active_waves[corridor_key] = cmd
         
         if not commands:
             return []
-        
+
         return self._get_current_commands()
     
     def _get_current_commands(self) -> List[dict]:
@@ -80,47 +84,81 @@ class GreenWaveCoordinator:
         return result
     
     def _find_corridors(self) -> List[List[str]]:
-        """Найти все линейные коридоры в дорожной сети."""
-        corridors = []
-        visited = set()
-        
-        intersections = list(traffic_network.intersection_phases.keys())
-        
-        for start_inter in intersections:
-            if start_inter in visited:
+        """
+        Найти линейные коридоры в дорожной сети.
+
+        Идём по связям «насквозь» ВДОЛЬ ОДНОЙ ОСИ. Раньше требовали, чтобы у
+        перекрёстка был ровно ОДИН downstream-сосед — из-за этого коридор
+        обрывался на любом 4-стороннем перекрёстке посреди прямой (у него ведь
+        есть ещё и перпендикулярные ответвления), и зелёная волна молча
+        отключалась на магистрали из 3+ перекрёстков.
+        """
+        links = self._collect_axis_links()
+        if not links:
+            return []
+
+        # adj[inter][axis] = множество соседей вдоль этой оси
+        adj: Dict[str, Dict[str, set]] = {}
+        for a, b, axis in links:
+            adj.setdefault(a, {}).setdefault(axis, set()).add(b)
+            adj.setdefault(b, {}).setdefault(axis, set()).add(a)
+
+        used_edges = set()
+        corridors: List[List[str]] = []
+
+        for a, b, axis in links:
+            edge = (min(a, b), max(a, b))
+            if edge in used_edges:
                 continue
-            
-            corridor = self._build_corridor_from(start_inter)
-            
-            if len(corridor) >= self.MIN_CORRIDOR_LENGTH:
-                corridors.append(corridor)
-                visited.update(corridor)
-        
+            chain = self._extend_straight(a, b, axis, adj)
+            for i in range(len(chain) - 1):
+                used_edges.add((min(chain[i], chain[i + 1]), max(chain[i], chain[i + 1])))
+            if len(chain) >= self.MIN_CORRIDOR_LENGTH:
+                corridors.append(chain)
+
         return corridors
-    
-    def _build_corridor_from(self, start_inter: str) -> List[str]:
-        """Построить коридор, начиная с перекрёстка."""
-        corridor = [start_inter]
-        current = start_inter
-        
+
+    def _collect_axis_links(self) -> List[Tuple[str, str, str]]:
+        """Рёбра между разными перекрёстками с указанием оси (x для EW, z для NS)."""
+        links = []
+        seen = set()
+        for (inter_a, app_a), (inter_b, app_b) in traffic_network.graph.edges:
+            if inter_a == inter_b:
+                continue
+            axis = "x" if app_a in ("approach_0", "approach_1") else "z"
+            key = (min(inter_a, inter_b), max(inter_a, inter_b), axis)
+            if key in seen:
+                continue
+            seen.add(key)
+            links.append(key)
+        return links
+
+    def _extend_straight(self, a: str, b: str, axis: str,
+                         adj: Dict[str, Dict[str, set]]) -> List[str]:
+        """Продолжить цепочку a-b в обе стороны строго вдоль оси axis."""
+        chain = [a, b]
+
+        # Вперёд от b
+        prev, cur = a, b
         while True:
-            downstream_map = traffic_network.get_downstream_intersections(current)
-            
-            all_downstream = set()
-            for downstream_list in downstream_map.values():
-                all_downstream.update(downstream_list)
-            
-            if len(all_downstream) == 1:
-                next_inter = list(all_downstream)[0]
-                if next_inter not in corridor:
-                    corridor.append(next_inter)
-                    current = next_inter
-                else:
-                    break
-            else:
+            nxt = [n for n in adj.get(cur, {}).get(axis, set())
+                   if n != prev and n not in chain]
+            if len(nxt) != 1:
                 break
-        
-        return corridor
+            chain.append(nxt[0])
+            prev, cur = cur, nxt[0]
+
+        # Назад от a
+        prev, cur = b, a
+        while True:
+            nxt = [n for n in adj.get(cur, {}).get(axis, set())
+                   if n != prev and n not in chain]
+            if len(nxt) != 1:
+                break
+            chain.insert(0, nxt[0])
+            prev, cur = cur, nxt[0]
+
+        return chain
     
     def _calculate_corridor_sync(self, corridor: List[str]) -> List[dict]:
         """
@@ -141,21 +179,13 @@ class GreenWaveCoordinator:
         base_phase = "EW" if main_axis == "x" else "NS"
         
         for idx, inter_id in enumerate(corridor):
-            if idx == 0:
-                commands.append({
-                    "target_intersection": inter_id,
-                    "phase": base_phase,
-                    "offset": 0.0,
-                    "corridor": corridor,
-                })
-            else:
-                offset = sum(travel_times[:idx])
-                commands.append({
-                    "target_intersection": inter_id,
-                    "phase": base_phase,
-                    "offset": offset,
-                    "corridor": corridor,
-                })
+            commands.append({
+                "target_intersection": inter_id,
+                "action": "GREEN_WAVE_SYNC",
+                "phase": base_phase,
+                "offset": 0.0 if idx == 0 else sum(travel_times[:idx]),
+                "corridor": corridor,
+            })
         
         return commands
     

@@ -123,7 +123,8 @@ class TrafficOrchestrator:
         
         # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
         active_phase, elapsed, emergency_override, green_wave_override = self._decide_phase(
-            inter_id, phase_names, green_wave_commands, emergency_approach, cascade_commands
+            inter_id, phase_names, green_wave_commands, emergency_approach,
+            cascade_commands, emergency_phase,
         )
         
         # ШАГ 4: Длительность зелёного (с поправкой каскада)
@@ -210,25 +211,42 @@ class TrafficOrchestrator:
     def _decide_phase(self, inter_id: str, phase_names: List[str],
                       green_wave_commands: List[dict],
                       emergency_approach: Optional[str],
-                      cascade_commands: Optional[List[dict]] = None) -> Tuple[str, float, Optional[dict], Optional[dict]]:
+                      cascade_commands: Optional[List[dict]] = None,
+                      emergency_phase: Optional[str] = None) -> Tuple[str, float, Optional[dict], Optional[dict]]:
         """ШАГ 3: Принять решение о фазе через PhaseManager."""
         phase_state = self.phase_manager.get_or_create(inter_id)
         self._apply_phase_bounds(inter_id, phase_state)
         active_phase = phase_state.active_phase
         elapsed = phase_state.elapsed
-        
-        # Проверяем EMERGENCY команды (приоритет над всем)
+
+        # ===== EMERGENCY (приоритет над всем) =====
+        # Источники (по убыванию приоритета):
+        #   1) спецтранспорт обнаружен В ЭТОМ батче (мгновенное форсирование фазы);
+        #   2) команда EMERGENCY_GREEN от cloud-тикера (каскад на upstream).
+        # Раньше искали EMERGENCY_GREEN только в green_wave_commands, где такой
+        # команды НЕ бывает (её кладёт cloud в cascade_commands) → коридор
+        # объявлялся активным, но фаза не переключалась (спецтранспорт стоял на RED).
         emergency_override = None
-        for cmd in green_wave_commands:
-            if cmd.get("target_intersection") == inter_id and cmd.get("action") == "EMERGENCY_GREEN":
-                emergency_override = cmd
-                break
-        
+        if emergency_phase and emergency_phase in phase_names:
+            emergency_override = {"phase": emergency_phase, "action": "EMERGENCY_GREEN"}
+        else:
+            for source in (cascade_commands or []):
+                if (source.get("target_intersection") == inter_id
+                        and source.get("action") == "EMERGENCY_GREEN"):
+                    emergency_override = source
+                    break
+            if emergency_override is None:
+                for cmd in green_wave_commands:
+                    if (cmd.get("target_intersection") == inter_id
+                            and cmd.get("action") == "EMERGENCY_GREEN"):
+                        emergency_override = cmd
+                        break
+
         # Проверяем, есть ли команда зелёной волны для этого перекрёстка
         green_wave_override = None
         if not emergency_override:  # Emergency имеет приоритет
             for gw_cmd in green_wave_commands:
-                if gw_cmd.get("target_intersection") == inter_id:
+                if gw_cmd.get("target_intersection") == inter_id and gw_cmd.get("phase"):
                     green_wave_override = gw_cmd
                     break
         

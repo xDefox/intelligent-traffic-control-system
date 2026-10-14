@@ -15,6 +15,23 @@ CASCADE_REDUCE_BASE = 5.0       # базовая урезка зелёного u
 CASCADE_REDUCE_SLOPE = 10.0     # добавка к урезке пропорционально загрузке
 CASCADE_EXTEND_BY = 3.0         # продление зелёного при зелёной волне, сек
 
+# ---------------------------------------------------------------------------
+# Параметры построения топологии из камер
+# ---------------------------------------------------------------------------
+# Максимальное расстояние связи двух соседних камер, м.
+MAX_LINK_DISTANCE = 200.0
+# Допуск бокового смещения: камеры считаются «на одной дороге», если
+# поперечное отклонение от луча камеры не превышает этого значения, м.
+LANE_ALIGN_TOLERANCE = 15.0
+# Единичные направления камер в плоскости X-Z (Unity): x — восток, z — север.
+DIRECTION_VECTORS = {
+    "E": (1.0, 0.0),
+    "W": (-1.0, 0.0),
+    "N": (0.0, 1.0),
+    "S": (0.0, -1.0),
+}
+OPPOSITE_DIRECTION = {"E": "W", "W": "E", "N": "S", "S": "N"}
+
 
 # ---------------------------------------------------------------------------
 # Утилиты разбора и генерации топологии
@@ -156,61 +173,78 @@ class CityTrafficGraph:
 
     def _build_edges_from_cameras(self):
         """
-        Camera-First Design: автоматически построить связи между камерами.
-        
-        Алгоритм:
-        - Камера A смотрит на E (восток), камера B смотрит на W (запад)
-        - Если расстояние между ними < 200м → они соединены дорогой
+        Camera-First Design: построить связи между камерами.
+
+        Алгоритм (исправлен):
+        Каждая камера соединяется ТОЛЬКО с БЛИЖАЙШЕЙ камерой, которая:
+          1. смотрит в противоположную сторону (E↔W, N↔S);
+          2. находится ПЕРЕД ней по её лучу (проекция на направление > 0);
+          3. лежит на той же дороге (поперечное смещение <= LANE_ALIGN_TOLERANCE);
+          4. не дальше MAX_LINK_DISTANCE.
+
+        Раньше соединяли ЛЮБУЮ противоположную камеру в радиусе 200 м — на
+        прямой из трёх перекрёстков с шагом 50 м это давало «сквозные» рёбра
+        (i1↔i3X поверх i2), из-за чего у перекрёстков появлялось по 2+ соседа
+        downstream и построение коридоров/каскад ломались.
         """
-        # Полная детерминированная перестройка из реестра камер: чистим граф,
-        # чтобы не копились устаревшие рёбра при смене метаданных камер.
         self.graph.clear()
 
-        # Группируем камеры по перекрёсткам
-        cameras_by_inter: Dict[str, List[dict]] = {}
-        for cam_id, cam_data in self.camera_registry.items():
+        items = list(self.camera_registry.items())
+
+        # Добавляем узлы (по направлениям камер).
+        for cam_id, cam_data in items:
             inter_id = cam_data.get("intersection_id")
-            if inter_id:
-                cameras_by_inter.setdefault(inter_id, []).append({
-                    "camera_id": cam_id,
-                    "direction": cam_data.get("direction"),
-                    "position": cam_data.get("position"),
-                })
-        
-        # Добавляем узлы
-        for inter_id, cameras in cameras_by_inter.items():
-            for cam in cameras:
-                direction = cam.get("direction", "")
-                if direction:
-                    # Преобразуем N/S/E/W в approach_0/1/2/3
-                    approach = self._direction_to_approach(direction)
-                    self.graph.add_node((inter_id, approach))
-        
-        # Ищем связи между камерами
-        camera_list = list(self.camera_registry.items())
-        for i, (cam_a_id, cam_a_data) in enumerate(camera_list):
-            for cam_b_id, cam_b_data in camera_list[i+1:]:
-                if self._cameras_are_connected(cam_a_data, cam_b_data):
-                    # Создаём ребро в обе стороны
-                    inter_a = cam_a_data.get("intersection_id")
-                    inter_b = cam_b_data.get("intersection_id")
-                    dir_a = cam_a_data.get("direction")
-                    dir_b = cam_b_data.get("direction")
-                    
-                    if inter_a and inter_b and dir_a and dir_b:
-                        approach_a = self._direction_to_approach(dir_a)
-                        approach_b = self._direction_to_approach(dir_b)
-                        
-                        # A → B (если A смотрит на B)
-                        self.graph.add_edge(
-                            (inter_a, approach_a), (inter_b, approach_b),
-                            lane_id=cam_a_id, connected=True,
-                        )
-                        # B → A (если B смотрит на A)
-                        self.graph.add_edge(
-                            (inter_b, approach_b), (inter_a, approach_a),
-                            lane_id=cam_b_id, connected=True,
-                        )
+            direction = cam_data.get("direction")
+            if inter_id and direction:
+                self.graph.add_node((inter_id, self._direction_to_approach(direction)))
+
+        # Для каждой камеры — ближайший сосед строго впереди по лучу.
+        for cam_a_id, cam_a in items:
+            best = self._find_nearest_ahead(cam_a, items, cam_a_id)
+            if not best:
+                continue
+            cam_b_id, cam_b, _dist = best
+            inter_a = cam_a.get("intersection_id")
+            inter_b = cam_b.get("intersection_id")
+            dir_a = cam_a.get("direction")
+            dir_b = cam_b.get("direction")
+            if not (inter_a and inter_b and dir_a and dir_b) or inter_a == inter_b:
+                continue
+
+            self.graph.add_edge(
+                (inter_a, self._direction_to_approach(dir_a)),
+                (inter_b, self._direction_to_approach(dir_b)),
+                lane_id=cam_a_id, connected=True,
+            )
+
+    def _find_nearest_ahead(self, cam_a: dict, items: List[Tuple[str, dict]],
+                            self_id: str) -> Optional[Tuple[str, dict, float]]:
+        """Ближайшая противоположно-направленная камера строго впереди по лучу cam_a."""
+        dir_a = cam_a.get("direction")
+        pos_a = cam_a.get("position")
+        vec = DIRECTION_VECTORS.get(dir_a)
+        if not vec or not pos_a:
+            return None
+        want_dir = OPPOSITE_DIRECTION.get(dir_a)
+
+        best: Optional[Tuple[str, dict, float]] = None
+        for cam_b_id, cam_b in items:
+            if cam_b_id == self_id or cam_b.get("direction") != want_dir:
+                continue
+            pos_b = cam_b.get("position")
+            if not pos_b:
+                continue
+            dx = pos_b.get("x", 0) - pos_a.get("x", 0)
+            dz = pos_b.get("z", 0) - pos_a.get("z", 0)
+            ahead = dx * vec[0] + dz * vec[1]
+            if ahead <= 0 or ahead > MAX_LINK_DISTANCE:
+                continue
+            lateral = abs(dx * vec[1] - dz * vec[0])
+            if lateral > LANE_ALIGN_TOLERANCE:
+                continue
+            if best is None or ahead < best[2]:
+                best = (cam_b_id, cam_b, ahead)
+        return best
 
     def _direction_to_approach(self, direction: str) -> str:
         """Преобразовать N/S/E/W в approach_0/1/2/3."""
@@ -219,35 +253,18 @@ class CityTrafficGraph:
 
     def _cameras_are_connected(self, cam_a: dict, cam_b: dict) -> bool:
         """
-        Проверить, соединены ли две камеры дорогой.
-        
-        Условия:
-        1. Они смотрят друг на друга (противоположные направления)
-        2. Расстояние между камерами < 200м
+        Проверить, соединены ли две камеры дорогой НАПРЯМУЮ.
+        True, если cam_b — ближайший корректный сосед впереди для cam_a,
+        либо наоборот. Используется как совместимый предикат.
         """
-        dir_a = cam_a.get("direction")
-        dir_b = cam_b.get("direction")
-        
-        if not dir_a or not dir_b:
-            return False
-        
-        # Проверяем противоположность направлений
-        opposite_pairs = {("E", "W"), ("W", "E"), ("N", "S"), ("S", "N")}
-        if (dir_a, dir_b) not in opposite_pairs:
-            return False
-        
-        # Проверяем расстояние
-        pos_a = cam_a.get("position", {})
-        pos_b = cam_b.get("position", {})
-        
-        if not pos_a or not pos_b:
-            return False
-        
-        dx = pos_a.get("x", 0) - pos_b.get("x", 0)
-        dz = pos_a.get("z", 0) - pos_b.get("z", 0)
-        distance = (dx*dx + dz*dz) ** 0.5
-        
-        return distance < 200.0  # 200 метров порог
+        items = list(self.camera_registry.items())
+        a_id = cam_a.get("camera_id")
+        b_id = cam_b.get("camera_id")
+        best_a = self._find_nearest_ahead(cam_a, items, a_id or "")
+        if best_a and best_a[0] == b_id:
+            return True
+        best_b = self._find_nearest_ahead(cam_b, items, b_id or "")
+        return bool(best_b and best_b[0] == a_id)
 
     def _register_approach(self, intersection_id: str, approach: str):
         """
@@ -291,6 +308,12 @@ class CityTrafficGraph:
         """
         Обновить состояние полосы от камеры. Вернуть congestion_index.
         При первом появлении lane_id — динамически регистрирует подход.
+
+        congestion_index = car_count / max_capacity (АБСОЛЮТНАЯ загрузка 0..1).
+        Раньше делили на «бегущий максимум» перекрёстка — из-за этого самый
+        загруженный подход ВСЕГДА показывал 100%, порог каскада 0.7 срабатывал
+        всегда, а цвета на карте были бесполезны. Если камера не сообщила
+        вместимость (<=0) — откатываемся на бегущий максимум.
         """
         inter_id, approach = parse_lane_id(lane_id)
         if inter_id == "unknown":
@@ -303,22 +326,23 @@ class CityTrafficGraph:
             return 0.0
 
         pool = self.lane_pool[lane_id]
+        car_count = max(0, car_count)
         pool["car_count"] = car_count
         pool["avg_speed"] = avg_speed
 
-        # ОБЩИЙ бегущий максимум машин ДЛЯ ВСЕГО перекрёстка (один знаменатель
-        # на все камеры/полосы). Никогда не уменьшается (функция max).
+        # Бегущий максимум машин по перекрёстку — fallback, если нет вместимости.
         inter_max = self.intersection_max_capacity.get(inter_id, 0)
         if car_count > inter_max:
             inter_max = car_count
             self.intersection_max_capacity[inter_id] = inter_max
 
-        # Вместимость полосы = ОБЩИЙ максимум перекрёстка (для UI и трекбара).
-        pool["max_capacity"] = inter_max
+        # Вместимость полосы: из камеры, иначе — бегущий максимум перекрёстка.
+        cap = max_capacity if max_capacity and max_capacity > 0 else inter_max
+        pool["max_capacity"] = cap
 
-        # congestion_index = car_count / общий_максимум_перекрёстка (приведено к 0..1)
-        if inter_max > 0:
-            pool["congestion_index"] = min(1.0, car_count / inter_max)
+        # congestion_index = car_count / вместимость (приведено к 0..1)
+        if cap > 0:
+            pool["congestion_index"] = min(1.0, car_count / cap)
         else:
             pool["congestion_index"] = 0.0
 
@@ -496,7 +520,7 @@ class CityTrafficGraph:
                             "action": "GREEN_WAVE",
                             "approach": approach,
                             "trigger_intersection": down_inter,
-                            "reason": f"{down_inter} free, wave possible",
+                            "reason": f"{inter_id}/{approach} free, wave possible",
                             "extend_green_by": CASCADE_EXTEND_BY,
                         })
                         processed.add(key)
