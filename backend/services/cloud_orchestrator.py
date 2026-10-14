@@ -81,10 +81,15 @@ class CloudOrchestrator:
             debug("CloudOrchestrator", "Started (ticker every 1s)")
     
     async def stop(self):
-        """Остановить тикер"""
+        """Остановить тикер и дождаться завершения фоновой задачи."""
         self._running = False
         if self._tick_task:
             self._tick_task.cancel()
+            try:
+                await self._tick_task
+            except asyncio.CancelledError:
+                pass
+            self._tick_task = None
         debug("CloudOrchestrator", "Stopped")
     
     async def _tick_loop(self):

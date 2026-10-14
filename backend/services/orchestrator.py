@@ -1,5 +1,6 @@
 # backend/services/orchestrator.py
 import json
+import traceback
 from typing import Dict, List, Optional, Tuple
 from backend.models.traffic import (
     BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
@@ -9,7 +10,7 @@ from backend.services.cloud_orchestrator import CloudOrchestrator
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
 from backend.services.statistics import traffic_stats
-from backend.core.logger import debug, info
+from backend.core.logger import debug, info, error
 from backend.core.lane_utils import normalize_lane_id, extract_approach_from_camera_id
 from backend.core.emergency import EmergencyDetector
 
@@ -40,6 +41,29 @@ class TrafficOrchestrator:
         self.phase_manager = PhaseManager()
 
     async def handle_batch_telemetry(
+        self, batch: BatchTelemetryDTO
+    ) -> Tuple[List[SingleResponseDTO], bool, Optional[str]]:
+        """Обработать batch-телеметрию с защитой от любых сбоев.
+
+        Ни одна ошибка обработки не должна ронять эндпоинт (500): при сбое
+        отдаём fail-safe ответ «всем RED» и пишем ошибку в лог. Плюс страховка
+        от пустого batch (без камер) — иначе дальнейший код может упасть.
+        """
+        if not batch.cameras:
+            return [], False, None
+        try:
+            return await self._handle_batch_telemetry_impl(batch)
+        except Exception as exc:
+            error("Orchestrator", f"batch {batch.intersection_id} failed: {exc}")
+            traceback.print_exc()
+            return (
+                [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0)
+                 for cam in batch.cameras],
+                False,
+                None,
+            )
+
+    async def _handle_batch_telemetry_impl(
         self, batch: BatchTelemetryDTO
     ) -> Tuple[List[SingleResponseDTO], bool, Optional[str]]:
         """
