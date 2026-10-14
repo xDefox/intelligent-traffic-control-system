@@ -1,6 +1,6 @@
 # Project State Analysis: Smart Crossroads Belarus (Intelligent Traffic Control System)
 
-> **Дата анализа:** 20.07.2026 (последняя ревизия: 13.10.2026)
+> **Дата анализа:** 20.07.2026 (последняя ревизия: 14.10.2026)
 > **Версия бэкенда:** 0.7.0 ("Camera-First Design + Fallback")
 > **Репозиторий:** https://github.com/xDefox/intelligent-traffic-control-system.git
 
@@ -66,10 +66,49 @@
 
 1. **Автотесты в репозитории** — `backend/tests/` на pytest (сейчас проверки — внешние smoke/emergency-скрипты в `/tmp/opencode/`; их нужно перенести в репозиторий и формализовать).
 2. **Unity: детекция спецтранспорта** (классы YOLO 2,3,5,7) — бэкенд-каскад уже не зависит от этого, но корректный триггер со стороны камер не реализован.
-3. **Rename файла** `Scene/.../TraddicLightViewer.cs` → `TrafficLightViewer.cs` (опечатка в имени, правится в Unity на Windows).
+3. ~~**Rename файла** `TraddicLightViewer.cs` → `TrafficLightViewer.cs`~~ — **сделано** (см. раздел 11.2).
 4. **Green Wave**: нелинейные коридоры, реальная скорость потока, динамический `cycle_time` (упомянуто в 4.2 и 6.1).
 5. **Прогнозная аналитика** (`backend/services/predictor.py`) и **Ramp Metering** (`ramp_metering.py`) — из задела «как в Дубае».
 6. Косметика: `delta_time`/константы по фазовым длительностям в orchestrator (8.0, 25.0, 10.0, 15.0) вынести в константы.
+
+---
+
+## 0b. РЕВИЗИЯ (сессия 14.10.2026): логика фаз, статистика, API
+
+> Unity-часть — см. раздел 11. Ниже — только бэкенд.
+
+### 0b.1. Логика фаз (`orchestrator.py`)
+
+| Что | Было | Стало / почему |
+|-----|------|----------------|
+| **Расчёт длительности зелёного** | `_calculate_green_duration` шёл по **всему** `lane_pool` без фильтра, суммируя машины по именам фаз (`EW`/`NS`) **всех** перекрёстков | Добавлен фильтр `data["intersection_id"] != inter_id → continue`. Раньше длительность зелёного на перекрёстке A зависела от трафика на B (одинаковые имена фаз). |
+| **Дублирование подсчёта** | подсчёт `phase_cars` был продублирован в `_decide_phase` и `_calculate_green_duration`, причём в одном месте с фильтром, в другом — без | Вынесен единый `_count_phase_cars(inter_id, phase_names)` — один источник, невозможно рассогласовать. |
+| **min/max длительности фаз** | `generate_phases()` задаёт `min_duration=5`/`max_duration=30`, но `PhaseState` всегда использовал дефолты 8/30 — конфиг был **мёртвым** | `_apply_phase_bounds()` переносит границы из конфига в `PhaseState`. Полы безопасности: min ≥ 3с, max ≥ 5с. |
+| **Ранний выход без фаз** | при пустом `phase_names` возвращался **голый список** ответов, а `main.py` распаковывает 3 значения → `ValueError` → 500 при некорректных `lane_id` | Возвращается полный 3-кортеж `(responses, emergency_detected, emergency_phase)`. |
+| **Аннотация возврата** | `-> list`, хотя фактически кортеж | `-> Tuple[List[SingleResponseDTO], bool, Optional[str]]`. |
+
+### 0b.2. Статистика
+
+- **Переключения фаз не считались вообще** (`total_phase_switches` всегда 0). Cloud-тикер определял фазу через `_get_intersection_phase`, который читал `lane_pool[...]["current_phase"]`, а это поле **никто не заполнял** → всегда `UNKNOWN` → сравнение `UNKNOWN == UNKNOWN` → 0 переключений.
+  **Фикс:** добавлен `graph_manager.set_intersection_phase(inter_id, phase)`; оркестратор публикует активную фазу после каждого решения. Теперь cloud-тикер видит реальную смену фазы и пишет ровно одно переключение на переход.
+- **Emergency-события считались на каждый batch.** `report_emergency` вызывался на каждой телеметрии, где камера видит спецтранспорт (несколько раз в секунду) → `_total_emergency_events` раздувался, `_current_emergency` перезаписывался (потеря записей), а `_emergency_cascade_done` сбрасывался → **дублирование каскадных команд каждую секунду**.
+  **Фикс:** повторный вызов для того же очага `(intersection, approach)` только продлевает таймер; новое событие/каскад — только при новом очаге.
+
+### 0b.3. API (`main.py`)
+
+- `@app.on_event("startup"/"shutdown")` → **`lifespan`** (deprecated в FastAPI/Starlette; современный способ).
+- `GET /api/v1/statistics/{lane_id}`: параметры `seconds`/`limit` ограничены через `Query(..., ge=..., le=...)` (раньше принимались отрицательные значения).
+
+### 0b.4. Найдено, НО требует решения автора (НЕ менял)
+
+**Каскад `REDUCE_GREEN` / `GREEN_WAVE` фактически ничего не делает.** `traffic_network.calculate_cascade()` формирует команды «урезать/продлить зелёный» для upstream-перекрёстков, но их **никто не потребляет**: оркестратор читает только команды `green_wave_coordinator` (у тех есть `phase`), а `calculate_cascade` кладёт команды без `phase` и `orchestrator` их не видит. Команды живут только в `/api/v1/state` и WS-broadcast (отображение). Прежде чем включать — нужно решить семантику (на сколько и на какое время урезать/продлить), поэтому оставлено на согласование.
+
+### 0b.5. Проверки (все зелёные)
+
+- `py_compile` по `backend/` — OK.
+- `ruff check backend/ --select F401,F811,F821,F841,F541` — All checks passed.
+- Ad-hoc (`/tmp/opencode/verify_fixes.py`): изоляция подсчёта машин по перекрёстку, публикация `current_phase`, one-shot emergency (3 вызова → 1 событие), 3-кортеж при пустых фазах — 6/6 PASS.
+- E2E через `TestClient` (реальный `app` + lifespan): batch → 200; смена EW→NS переключает ответы RED/GREEN и инкрементит `total_phase_switches`.
 
 ---
 

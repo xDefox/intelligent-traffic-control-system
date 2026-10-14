@@ -42,15 +42,36 @@ class CloudOrchestrator:
         """
         Сообщить Cloud о детекции спецтранспорта.
         Cloud каскадирует emergency на upstream перекрёстки.
+
+        Вызывается на КАЖДОМ batch, где камера видит спецтранспорт. Поэтому
+        повторные вызовы для того же очага не должны создавать новые события в
+        статистике или перезапускать каскад — иначе счётчик emergency раздувается,
+        а каскадные команды дублируются каждую секунду.
         """
+        same_episode = (
+            self._emergency_active
+            and self._emergency_intersection == intersection_id
+            and self._emergency_approach == approach
+        )
+
+        if same_episode:
+            # Продолжение того же очага: обновляем фазу и продлеваем таймер.
+            self._emergency_phase = phase
+            self._emergency_timer = 10.0
+            return
+
+        # Новый очаг спецтранспорта (другая точка/подход).
+        if self._emergency_active:
+            traffic_stats.end_emergency()
+        traffic_stats.start_emergency(intersection_id, approach, phase)
+        info("CloudOrchestrator", f"🚨 EMERGENCY START: {intersection_id}/{approach} phase={phase}")
+
         self._emergency_active = True
         self._emergency_intersection = intersection_id
         self._emergency_approach = approach
         self._emergency_phase = phase
-        self._emergency_timer = 10.0  # Сброс таймера
+        self._emergency_timer = 10.0
         self._emergency_cascade_done = False
-        traffic_stats.start_emergency(intersection_id, approach, phase)
-        info("CloudOrchestrator", f"🚨 EMERGENCY: {intersection_id}/{approach} phase={phase}")
     
     def start(self):
         """Запустить фоновый тикер (раз в секунду)"""

@@ -314,6 +314,17 @@ class CityTrafficGraph:
 
         return pool["congestion_index"]
 
+    def set_intersection_phase(self, intersection_id: str, phase: str):
+        """Записать текущую активную фазу во ВСЕ полосы перекрёстка.
+
+        Единая точка публикации фазы: нужна статистике (подсчёт переключений
+        в cloud-тикере) и UI. Раньше поле 'current_phase' в lane_pool никто не
+        заполнял, из-за чего подсчёт переключений фаз всегда давал 0.
+        """
+        for data in self.lane_pool.values():
+            if data["intersection_id"] == intersection_id:
+                data["current_phase"] = phase
+
     def get_lanes_for_intersection(self, intersection_id: str) -> List[dict]:
         """Получить все полосы перекрёстка (только зарегистрированные из данных)."""
         return [

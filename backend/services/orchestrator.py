@@ -29,7 +29,9 @@ class TrafficOrchestrator:
         self.cloud = cloud
         self.phase_manager = PhaseManager()
 
-    async def handle_batch_telemetry(self, batch: BatchTelemetryDTO) -> list:
+    async def handle_batch_telemetry(
+        self, batch: BatchTelemetryDTO
+    ) -> Tuple[List[SingleResponseDTO], bool, Optional[str]]:
         """
         Обработать batch-телеметрию от ВСЕХ камер одного перекрёстка.
         
@@ -72,7 +74,14 @@ class TrafficOrchestrator:
         debug("Orchestrator", f"  Graph nodes: {len(traffic_network.graph.nodes)}, edges: {len(traffic_network.graph.edges)}")
         
         if not phase_names:
-            return [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0) for cam in batch.cameras]
+            # Нет фаз (например, некорректные lane_id) — всё RED, но возвращаем
+            # ПОЛНЫЙ 3-кортеж, иначе main.py упадёт на распаковке.
+            return (
+                [SingleResponseDTO(camera_id=cam.camera_id, target_phase="RED", green_duration=0.0)
+                 for cam in batch.cameras],
+                emergency_detected,
+                emergency_phase,
+            )
         
         # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
         active_phase, elapsed, emergency_override, green_wave_override = self._decide_phase(
@@ -80,11 +89,14 @@ class TrafficOrchestrator:
         )
         
         # ШАГ 4: Длительность зелёного
-        green_duration = self._calculate_green_duration(active_phase, phase_names)
+        green_duration = self._calculate_green_duration(inter_id, active_phase, phase_names)
         
         # ШАГ 5: Определяем направления активной фазы
         active_approaches = self._get_active_approaches(phases_config, active_phase)
         
+        # Публикуем текущую фазу в lane_pool (для статистики переключений и UI)
+        traffic_network.set_intersection_phase(inter_id, active_phase or "UNKNOWN")
+
         # ШАГ 5.5-5.6: Запись статистики
         self._record_statistics(batch, inter_id, active_phase)
         
@@ -157,6 +169,7 @@ class TrafficOrchestrator:
                       emergency_approach: Optional[str]) -> Tuple[str, float, Optional[dict], Optional[dict]]:
         """ШАГ 3: Принять решение о фазе через PhaseManager."""
         phase_state = self.phase_manager.get_or_create(inter_id)
+        self._apply_phase_bounds(inter_id, phase_state)
         active_phase = phase_state.active_phase
         elapsed = phase_state.elapsed
         
@@ -176,13 +189,7 @@ class TrafficOrchestrator:
                     break
         
         # Считаем машины на каждой фазе
-        phase_cars = {pn: 0 for pn in phase_names}
-        for lane_id, data in traffic_network.lane_pool.items():
-            if data["intersection_id"] != inter_id:
-                continue
-            lane_phase = traffic_network.get_phase_for_approach(inter_id, data["approach"])
-            if lane_phase in phase_cars:
-                phase_cars[lane_phase] += data["car_count"]
+        phase_cars = self._count_phase_cars(inter_id, phase_names)
         
         # ===== EMERGENCY OVERRIDE =====
         if emergency_override:
@@ -231,23 +238,56 @@ class TrafficOrchestrator:
         
         return active_phase, elapsed, emergency_override, green_wave_override
 
-    def _calculate_green_duration(self, active_phase: str, phase_names: List[str]) -> float:
-        """ШАГ 4: Длительность зелёного на основе загруженности."""
-        # Считаем машины на каждой фазе
-        phase_cars = {pn: 0 for pn in phase_names}
-        for lane_id, data in traffic_network.lane_pool.items():
-            lane_phase = traffic_network.get_phase_for_approach(data["intersection_id"], data["approach"])
-            if lane_phase in phase_cars:
-                phase_cars[lane_phase] += data["car_count"]
-        
+    def _calculate_green_duration(self, inter_id: str, active_phase: str,
+                                  phase_names: List[str]) -> float:
+        """ШАГ 4: Длительность зелёного на основе загруженности.
+
+        ВАЖНО: машины считаются ТОЛЬКО по этому перекрёстку. Раньше цикл шёл по
+        всему lane_pool без фильтра, и фазы соседних перекрёстков (с теми же
+        именами "EW"/"NS") подмешивались в расчёт — длительность зелёного
+        зависела от чужого трафика.
+        """
+        phase_cars = self._count_phase_cars(inter_id, phase_names)
+
         total_cars = sum(phase_cars.values())
         if total_cars > 0 and active_phase:
             load = phase_cars.get(active_phase, 0) / max(total_cars, 1)
             green_duration = min(25.0, max(8.0, 10.0 + load * 15.0))
         else:
             green_duration = 10.0
-        
+
         return green_duration
+
+    def _count_phase_cars(self, inter_id: str, phase_names: List[str]) -> Dict[str, int]:
+        """Сумма машин по фазам ТОЛЬКО указанного перекрёстка.
+
+        Единый источник подсчёта (используется и при выборе фазы, и при расчёте
+        длительности зелёного) — чтобы логика не расходилась между вызовами.
+        """
+        phase_cars = {pn: 0 for pn in phase_names}
+        for data in traffic_network.lane_pool.values():
+            if data["intersection_id"] != inter_id:
+                continue
+            lane_phase = traffic_network.get_phase_for_approach(inter_id, data["approach"])
+            if lane_phase in phase_cars:
+                phase_cars[lane_phase] += data["car_count"]
+        return phase_cars
+
+    def _apply_phase_bounds(self, inter_id: str, phase_state):
+        """Применить min/max длительности фазы из конфига перекрёстка.
+
+        Раньше PhaseState всегда использовал дефолты (8/30) и игнорировал
+        min_duration/max_duration из generate_phases(). Теперь конфиг — источник
+        истины (берим значения первой фазы; в generate_phases они одинаковы).
+        """
+        phases_config = traffic_network.intersection_phases.get(inter_id, {})
+        for pd in phases_config.values():
+            if isinstance(pd, dict):
+                if "min_duration" in pd:
+                    phase_state.min_duration = max(3.0, pd["min_duration"])
+                if "max_duration" in pd:
+                    phase_state.max_duration = max(5.0, pd["max_duration"])
+                break
 
     def _get_active_approaches(self, phases_config: Dict[str, dict], active_phase: str) -> List[str]:
         """ШАГ 5: Определить направления активной фазы."""

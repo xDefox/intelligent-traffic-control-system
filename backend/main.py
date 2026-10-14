@@ -1,16 +1,36 @@
 # backend/main.py
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from backend.models.traffic import BatchTelemetryDTO, BatchResponseDTO
 from backend.services.orchestrator import TrafficOrchestrator
 from backend.services.cloud_orchestrator import CloudOrchestrator
 
-app = FastAPI(title="Smart Crossroads UTC-UX Distributed Network", version="0.7.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом: запуск/остановка cloud-тикера.
+
+    Современная замена deprecated @app.on_event("startup"/"shutdown").
+    Ссылается на глобальный `cloud`, создаваемый ниже по модулю.
+    """
+    cloud.start()
+    try:
+        yield
+    finally:
+        await cloud.stop()
+
+
+app = FastAPI(
+    title="Smart Crossroads UTC-UX Distributed Network",
+    version="0.7.0",
+    lifespan=lifespan,
+)
 
 
 class ConnectionManager:
@@ -40,16 +60,6 @@ cloud = CloudOrchestrator(ws_manager=manager)
 
 # Fog-оркестратор: принимает телеметрию, общается с Cloud
 orchestrator = TrafficOrchestrator(ws_manager=manager, cloud=cloud)
-
-
-@app.on_event("startup")
-async def startup():
-    cloud.start()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await cloud.stop()
 
 
 @app.websocket("/ws/monitor")
@@ -118,7 +128,11 @@ async def get_statistics():
 
 
 @app.get("/api/v1/statistics/{lane_id}")
-async def get_lane_statistics(lane_id: str, seconds: int = 300, limit: int = 50):
+async def get_lane_statistics(
+    lane_id: str,
+    seconds: int = Query(300, ge=1, le=86400, description="Окно истории в секундах"),
+    limit: int = Query(50, ge=1, le=3600, description="Максимум записей"),
+):
     """
     Получить исторические данные для полосы (time series загрузки её перекрёстка).
 
