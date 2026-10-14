@@ -3096,7 +3096,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1141383408}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f69e1b6e9ddddbe428847eccc62cd9d1, type: 3}
+  m_Script: {fileID: 11500000, guid: 30562c420c317d0469b962cf732fb09c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IntersectionManager
   mainRoadLights:
