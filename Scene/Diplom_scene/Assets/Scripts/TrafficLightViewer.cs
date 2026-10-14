@@ -28,22 +28,31 @@ public class TrafficLightViewer : MonoBehaviour
         if (redLight != null) redMat = redLight.material;
         if (yellowLight != null) yellowMat = yellowLight.material;
         if (greenLight != null) greenMat = greenLight.material;
+
+        // Применяем стартовый цвет принудительно: currentLight по умолчанию Red,
+        // а SwitchToColor() выходит раньше при том же цвете, поэтому без этого
+        // вызова красный сигнал не зажигался при старте сцены.
+        ApplyColor(currentLight);
     }
 
     // Этот метод теперь вызывается из главного менеджера перекрестка
     public void SwitchToColor(LightColor newColor)
     {
         if (newColor == currentLight) return; // Skip if same color
-        
-        currentLight = newColor;
 
+        currentLight = newColor;
+        ApplyColor(currentLight);
+    }
+
+    private void ApplyColor(LightColor color)
+    {
         // Гасим все
         SetEmission(redMat, false, Color.black);
         SetEmission(yellowMat, false, Color.black);
         SetEmission(greenMat, false, Color.black);
 
         // Зажигаем нужный
-        switch (currentLight)
+        switch (color)
         {
             case LightColor.Red: SetEmission(redMat, true, redEmission); break;
             case LightColor.Yellow: SetEmission(yellowMat, true, yellowEmission); break;

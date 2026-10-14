@@ -704,3 +704,65 @@ Logger.LogError("IntersectionVisionManager", $"Batch request failed: {request.er
 - **Вендорская перспектива (тираж 100 шт):** NPV = +297 903 BYN, IRR = 69.2% (не 219% — ошибка/опечатка прежней версии модели).
 - **Точки безубыточности (относительно движения):** городская модель — безубыточен от 18.2% эффекта; вендорская — уже безубыточен базово.
 - Скрипт читается и исполняется как модуль: `python -m analysis.economics_model`.
+
+---
+
+## 11. UNITY: состояние сцены и известные проблемы (ревизия 14.10.2026)
+
+### 11.1. Симптом и причина (было: фазы не переключались, лампы не горели)
+
+**Симптом:** бэкенд запущен и корректно отвечает `GREEN`/`RED`, но в Unity светофоры стоят красными и не загораются, фаза не отображается.
+
+**Диагностика:**
+1. Бэкенд проверен отдельно — фазовая логика исправна (EW → `GREEN` для `approach_0/1`, `RED` для `2/3`; проверено с машинами, без машин, и без метаданных камер). Путь ответа `/api/v1/telemetry/batch` в ревизии кода **не менялся**.
+2. В сценах Unity компонент `IntersectionManager` в `m_Script` ссылался на **несуществующий GUID** `f69e1b6e9ddddbe428847eccc62cd9d1`, тогда как у `Assets/Scripts/IntersectionManager.cs` GUID = `30562c420c317d0469b962cf732fb09c`. Такая нестыковка была **уже до ревизии** (в коммите `6a3d7e9`), т.е. пре-существующий дефект.
+
+**Почему это ломало именно так:**
+- Unity показывал у компонента «Missing (Mono Script)» → `IntersectionManager.Start()` не вызывался → управление лампами и автономный цикл не работали.
+- `IntersectionVisionManager.intersectionController` указывал на этот «мёртвый» компонент, а обработка ответа обёрнута в `if (… && intersectionController != null)` → команды фаз не применялись. Телеметрия уходила, ответ приходил, применять его было не к чему.
+
+**Исправление (коммит `ee1d997`):** во всех сценах GUID `f69e1b6e…` заменён на актуальный `30562c…`:
+- `SampleScene.unity` (2), `scene_easy_intersection.unity` (4), `scene_backup.unity` (3), `_Recovery/0*.unity`.
+- Поля компонента (`xAxisLights`, `zAxisLights`, `useAutonomousCycle`, `zGreenDuration`, `yellowDuration`, `xGreenDuration`, `enableDebugLogs`) совпадают с `IntersectionManager` — замена безопасна; ссылка `intersectionController` переподключается по `fileID`.
+
+**Проверка после правки:** в Hierarchy у объектов `IntersectionManager*` пропадает значок ⚠; сцена ссылается на валидный скрипт.
+
+### 11.2. Переименование и баг эмиссии светофора (исправлено)
+
+- Файл `Assets/Scripts/TraddicLightViewer.cs` содержал класс `TrafficLightViewer` — **несовпадение имени файла и класса** (Unity не привязывает такой MonoBehaviour). Файл переименован в `TrafficLightViewer.cs` вместе с `.cs.meta` (GUID `af406a1114f4e9a43b2cd7e7221096e8` сохранён, ссылки в сценах остались валидны).
+- Баг отображения: `currentLight` инициализировался как `Red`, а `SwitchToColor()` выходил раньше (`if (newColor == currentLight) return;`) → самый первый красный **никогда не включал эмиссию** (красный не светился, пока не переключишься в другой цвет и обратно). Добавлен `ApplyColor()` и принудительный вызов стартового цвета в `Start()`.
+
+### 11.3. Остаётся починить (нужны действия в Unity на Windows)
+
+| Компонент | Где | Кол-во | Проблема | Что делать |
+|-----------|-----|--------|----------|------------|
+| `RoadSegment` | `SampleScene` | 54 | Скрипт `RoadSegment.cs` **отсутствует в репозитории** (не найден нигде в `Assets/`) | Вернуть скрипт в проект **или** удалить компоненты «Missing (Mono Script)» из сцены (если функционально не нужны) |
+| `OncomingTrafficDetector` | `SampleScene` | 1 | Скрипт `OncomingTrafficDetector.cs` отсутствует в репозитории | То же |
+
+> Это не влияет на управление светофорами (не контроллер фаз), но даёт ошибки «Missing Script» в консоли Unity и потенциально ломает поведение дорог/потока — требует решения автора сцены.
+
+### 11.4. Чек-лист настройки сцены (для дальнейших правок)
+
+1. На GameObject перекрёстка должны быть **оба** компонента: `IntersectionManager` (управление лампами) и `IntersectionVisionManager` (телеметрия).
+2. `IntersectionManager`:
+   - `xAxisLights` — список светофоров оси X (`approach_0,1`);
+   - `zAxisLights` — светофоры оси Z (`approach_2,3`);
+   - `useAutonomousCycle` — по умолчанию в сцене выключен (`0`), управление от бэкенда.
+3. `IntersectionVisionManager`:
+   - `xAxisCameras` / `zAxisCameras` — заполнены (`EdgeVisionCamera`), иначе `Start()` пишет ошибку и выходит;
+   - `intersectionController` — ссылка на `IntersectionManager`;
+   - `sharedYoloModel` — назначена YOLO-модель;
+   - `batchTelemetryUrl` = `http://127.0.0.1:8050/api/v1/telemetry/batch` (порт должен совпадать с `BACKEND_PORT`/`.env`).
+4. Каждый светофор (`TrafficLightViewer`) — заполнены `redLight`/`yellowLight`/`greenLight` (MeshRenderer сфер), включён emission-материал.
+5. Порядок запуска: сначала бэкенд (`python -m backend.main`), затем Play в Unity. Проверить в консоли Unity строки `🚦 Started: ID=…` и отсутствие «Missing Script».
+
+### 11.5. Как быстро находить битые ссылки на скрипты в сценах
+
+GUID скрипта лежит в `<Script>.cs.meta`. Если в `.unity` строка `m_Script` ссылается на GUID, которого нет среди `.cs.meta`, — компонент «Missing». Быстрая проверка (из корня репо):
+
+```bash
+# показать все GUID скриптов
+grep -h guid Scene/Diplom_scene/Assets/**/*.cs.meta
+# показать все ссылки сцен на скрипты
+grep -rh "m_Script:" Scene/Diplom_scene/Assets/**/*.unity | sort -u
+```
