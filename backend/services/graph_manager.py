@@ -7,6 +7,16 @@ from backend.core.lane_utils import parse_lane_id
 
 
 # ---------------------------------------------------------------------------
+# Параметры каскадного управления (metering магистрали)
+# ---------------------------------------------------------------------------
+CASCADE_CONGESTION_HIGH = 0.7   # подход «забит» → upstream режет зелёный
+CASCADE_CONGESTION_LOW = 0.3    # подход «свободен» → продлеваем зелёный
+CASCADE_REDUCE_BASE = 5.0       # базовая урезка зелёного upstream, сек
+CASCADE_REDUCE_SLOPE = 10.0     # добавка к урезке пропорционально загрузке
+CASCADE_EXTEND_BY = 3.0         # продление зелёного при зелёной волне, сек
+
+
+# ---------------------------------------------------------------------------
 # Утилиты разбора и генерации топологии
 # ---------------------------------------------------------------------------
 
@@ -426,13 +436,19 @@ class CityTrafficGraph:
 
     def calculate_cascade(self) -> List[dict]:
         """
-        Проверить все перекрёстки.
-        Если подход забит >70% → upstream урезает зелёный.
-        Если подход свободен <30% → можно продлить зелёный (зелёная волна).
+        Metering магистрали: выравнивает загрузку соседних перекрёстков.
+
+        Если подход перекрёстка забит (>70%) — его upstream-соседи, которые
+        вливают в этот подход, получают REDUCE_GREEN: короче зелёный на своём
+        вливающем подходе, чтобы не переполнять забитый перекрёсток.
+        Если подход свободен (<30%) — продлеваем зелёный (GREEN_WAVE),
+        чтобы пропустить волну.
+
         Работает для любого числа дорог (1-4), т.к. топология из данных.
+        Сложность: O(L + C) — L полос, C уже готовых upstream/downstream записей.
         """
-        commands = []
-        processed = set()
+        commands: List[dict] = []
+        processed: Set[Tuple[str, str, str]] = set()
 
         for inter_id in self.intersection_phases:
             for lane_id, data in self.lane_pool.items():
@@ -442,35 +458,48 @@ class CityTrafficGraph:
                 approach = data["approach"]
                 congestion = data["congestion_index"]
 
-                if congestion > 0.7:
+                if congestion > CASCADE_CONGESTION_HIGH:
                     upstream_map = self.get_upstream_intersections(inter_id)
-                    if approach in upstream_map:
-                        for up_inter in upstream_map[approach]:
-                            key = (up_inter, approach, "REDUCE")
-                            if key not in processed:
-                                commands.append({
-                                    "target_intersection": up_inter,
-                                    "action": "REDUCE_GREEN",
-                                    "approach": approach,
-                                    "reason": f"{inter_id}/{approach} congested {congestion:.0%}",
-                                    "reduce_green_by": int(5 + congestion * 10),
-                                })
-                                processed.add(key)
+                    if approach not in upstream_map:
+                        continue
+                    for up_inter in upstream_map[approach]:
+                        # Подход самого upstream, которым он вливает в забитый
+                        up_approach = self.get_approach_toward(up_inter, inter_id, approach)
+                        if up_approach is None:
+                            continue
+                        key = (up_inter, up_approach, "REDUCE")
+                        if key in processed:
+                            continue
+                        commands.append({
+                            "target_intersection": up_inter,
+                            "action": "REDUCE_GREEN",
+                            "approach": up_approach,
+                            "trigger_intersection": inter_id,
+                            "trigger_approach": approach,
+                            "reason": f"{inter_id}/{approach} congested {congestion:.0%}",
+                            "reduce_green_by": round(
+                                CASCADE_REDUCE_BASE + congestion * CASCADE_REDUCE_SLOPE, 1
+                            ),
+                        })
+                        processed.add(key)
 
-                elif congestion < 0.3:
+                elif congestion < CASCADE_CONGESTION_LOW:
                     downstream_map = self.get_downstream_intersections(inter_id)
-                    if approach in downstream_map:
-                        for down_inter in downstream_map[approach]:
-                            key = (inter_id, approach, "WAVE")
-                            if key not in processed:
-                                commands.append({
-                                    "target_intersection": inter_id,
-                                    "action": "GREEN_WAVE",
-                                    "approach": approach,
-                                    "reason": f"{down_inter} free, wave possible",
-                                    "extend_green_by": 3,
-                                })
-                                processed.add(key)
+                    if approach not in downstream_map:
+                        continue
+                    for down_inter in downstream_map[approach]:
+                        key = (inter_id, approach, "WAVE")
+                        if key in processed:
+                            continue
+                        commands.append({
+                            "target_intersection": inter_id,
+                            "action": "GREEN_WAVE",
+                            "approach": approach,
+                            "trigger_intersection": down_inter,
+                            "reason": f"{down_inter} free, wave possible",
+                            "extend_green_by": CASCADE_EXTEND_BY,
+                        })
+                        processed.add(key)
 
         return commands
 

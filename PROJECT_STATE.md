@@ -99,15 +99,28 @@
 - `@app.on_event("startup"/"shutdown")` → **`lifespan`** (deprecated в FastAPI/Starlette; современный способ).
 - `GET /api/v1/statistics/{lane_id}`: параметры `seconds`/`limit` ограничены через `Query(..., ge=..., le=...)` (раньше принимались отрицательные значения).
 
-### 0b.4. Найдено, НО требует решения автора (НЕ менял)
+### 0b.4. Каскад (metering магистрали) — ВКЛЮЧЁН
 
-**Каскад `REDUCE_GREEN` / `GREEN_WAVE` фактически ничего не делает.** `traffic_network.calculate_cascade()` формирует команды «урезать/продлить зелёный» для upstream-перекрёстков, но их **никто не потребляет**: оркестратор читает только команды `green_wave_coordinator` (у тех есть `phase`), а `calculate_cascade` кладёт команды без `phase` и `orchestrator` их не видит. Команды живут только в `/api/v1/state` и WS-broadcast (отображение). Прежде чем включать — нужно решить семантику (на сколько и на какое время урезать/продлить), поэтому оставлено на согласование.
+**Было:** `traffic_network.calculate_cascade()` формировал команды `REDUCE_GREEN`/`GREEN_WAVE`, но их **никто не потреблял** — оркестратор читал только команды `green_wave_coordinator` (у тех есть `phase`), а эти команды жили лишь в `/api/v1/state` и WS-broadcast (отображение). Плюс `REDUCE_GREEN` нёс подход *забитого* перекрёстка, а upstream-цели нужен **свой** вливающий подход.
+
+**Стало (metering):**
+- `calculate_cascade()` теперь кладёт в `REDUCE_GREEN` подход самого upstream (`get_approach_toward(up_inter, inter_id, approach)`) и добавляет `trigger_intersection`/`trigger_approach` для трассировки. Пороги/коэффициенты вынесены в константы: `CASCADE_CONGESTION_HIGH=0.7`, `CASCADE_CONGESTION_LOW=0.3`, `CASCADE_REDUCE_BASE=5`, `CASCADE_REDUCE_SLOPE=10`, `CASCADE_EXTEND_BY=3`.
+- Оркестратор читает команды cloud-тикера (`cloud.get_cascade_commands()`) и применяет их (`orchestrator._cascade_adjustment`):
+  - `REDUCE_GREEN` — **укорачивает** удержание активной фазы, `GREEN_WAVE` — **продлевает**.
+  - Команда применяется, только если её подход принадлежит **активной** фазе (иначе укоротили бы не тот зелёный).
+  - Реальный рычаг — решение бэкенда о фазе: в `_decide_phase` вместо `phase_state.max_duration` используется `eff_max = max(min, min(base_max + extend − reduce, base_max + CASCADE_MAX_EXTEND))`. Поле `green_duration` в ответе тоже корректируется (для UI/Unity).
+  - Константы длительности: `GREEN_DURATION_MIN/MAX/BASE/LOAD_SPAN = 8/25/10/15`.
+
+**Смысл:** забитый перекрёсток (>70%) заставляет upstream резать зелёный на вливе — очереди выравниваются (напр. 8-2-4 → ближе к 4-4-4); свободный (<30%) — продлевает для зелёной волны.
+
+> Направление по графу: «забитый притормаживает тех, кто в него вливается». Внутри перекрёстка адаптация (больше зелёного загруженной фазе) реализована отдельно в `_calculate_green_duration` (раздел 0b.1).
 
 ### 0b.5. Проверки (все зелёные)
 
 - `py_compile` по `backend/` — OK.
 - `ruff check backend/ --select F401,F811,F821,F841,F541` — All checks passed.
 - Ad-hoc (`/tmp/opencode/verify_fixes.py`): изоляция подсчёта машин по перекрёстку, публикация `current_phase`, one-shot emergency (3 вызова → 1 событие), 3-кортеж при пустых фазах — 6/6 PASS.
+- Ad-hoc (`/tmp/opencode/verify_cascade.py`): каскад A→B — забитый B (90%) даёт `REDUCE_GREEN` для A/approach_0 (−14с); применение только на активной фазе; удержание фазы реально укорачивается (elapsed=25 при base max=30 → переключение); свободный сценарий даёт `GREEN_WAVE` (+3с) — все PASS.
 - E2E через `TestClient` (реальный `app` + lifespan): batch → 200; смена EW→NS переключает ответы RED/GREEN и инкрементит `total_phase_switches`.
 
 ---
@@ -212,9 +225,10 @@
   - `update_lane_state()` — обновление состояния полосы
   - `get_congestion_for_phase()` — средняя загруженность фазы
   - `get_upstream_intersections()` / `get_downstream_intersections()` — кэшированная топология
-  - `calculate_cascade()` — каскадный анализ:
-    - congestion > 70% → upstream урезает зелёный
-    - congestion < 30% → downstream продлевает зелёный (зелёная волна)
+  - `calculate_cascade()` — каскадный анализ (metering):
+    - congestion > 70% → upstream урезает зелёный на **своём вливающем** подходе (`REDUCE_GREEN`, порог/коэф. — константы `CASCADE_*`)
+    - congestion < 30% → продлевает зелёный (`GREEN_WAVE`, зелёная волна)
+    - команды потребляет оркестратор (`_cascade_adjustment`, см. 0b.4)
 
 #### 2.1.7. `services/cloud_orchestrator.py` — Cloud-уровень
 - **Статус:** ✅ Работает

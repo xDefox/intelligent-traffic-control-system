@@ -14,6 +14,16 @@ from backend.core.lane_utils import normalize_lane_id, extract_approach_from_cam
 from backend.core.emergency import EmergencyDetector
 
 
+# ---------------------------------------------------------------------------
+# Параметры длительности зелёного и каскадного metering
+# ---------------------------------------------------------------------------
+GREEN_DURATION_MIN = 8.0       # нижняя граница зелёного, сек
+GREEN_DURATION_MAX = 25.0      # верхняя граница зелёного, сек
+GREEN_DURATION_BASE = 10.0     # базовый зелёный при нулевой нагрузке, сек
+GREEN_DURATION_LOAD_SPAN = 15.0  # добавка к базовому при полной загрузке фазы
+CASCADE_MAX_EXTEND = 15.0      # предел продления фазы каскадом сверх её max
+
+
 class TrafficOrchestrator:
     """
     Оркестратор.
@@ -59,6 +69,10 @@ class TrafficOrchestrator:
         # Получаем команды зелёной волны
         green_wave_commands = green_wave_coordinator.calculate_green_wave()
         
+        # Команды каскада (metering магистрали), посчитанные cloud-тикером:
+        # забитый перекрёсток заставляет upstream урезать зелёный на вливе.
+        cascade_commands = self._get_cascade_commands()
+        
         # ШАГ 0.5: Регистрация камер (Camera-First Design)
         self._register_cameras(batch.cameras, inter_id)
         
@@ -85,11 +99,16 @@ class TrafficOrchestrator:
         
         # ШАГ 3: Решение о фазе через PhaseManager (единый источник истины)
         active_phase, elapsed, emergency_override, green_wave_override = self._decide_phase(
-            inter_id, phase_names, green_wave_commands, emergency_approach
+            inter_id, phase_names, green_wave_commands, emergency_approach, cascade_commands
         )
         
-        # ШАГ 4: Длительность зелёного
+        # ШАГ 4: Длительность зелёного (с поправкой каскада)
         green_duration = self._calculate_green_duration(inter_id, active_phase, phase_names)
+        reduce_by, extend_by = self._cascade_adjustment(inter_id, active_phase, cascade_commands)
+        green_duration = max(
+            GREEN_DURATION_MIN,
+            min(GREEN_DURATION_MAX, green_duration + extend_by - reduce_by),
+        )
         
         # ШАГ 5: Определяем направления активной фазы
         active_approaches = self._get_active_approaches(phases_config, active_phase)
@@ -166,7 +185,8 @@ class TrafficOrchestrator:
 
     def _decide_phase(self, inter_id: str, phase_names: List[str],
                       green_wave_commands: List[dict],
-                      emergency_approach: Optional[str]) -> Tuple[str, float, Optional[dict], Optional[dict]]:
+                      emergency_approach: Optional[str],
+                      cascade_commands: Optional[List[dict]] = None) -> Tuple[str, float, Optional[dict], Optional[dict]]:
         """ШАГ 3: Принять решение о фазе через PhaseManager."""
         phase_state = self.phase_manager.get_or_create(inter_id)
         self._apply_phase_bounds(inter_id, phase_state)
@@ -221,7 +241,17 @@ class TrafficOrchestrator:
             # ДИНАМИЧЕСКОЕ переключение для ЛЮБОГО числа фаз (1..N дорог)
             this = phase_cars.get(active_phase, 0)
 
-            if elapsed >= phase_state.max_duration:
+            # Каскадный metering: если забитый сосед просит притормозить влив
+            # (REDUCE_GREEN) — укорачиваем эту фазу; если зелёная волна
+            # (GREEN_WAVE) — продлеваем. Границы не даём пробить.
+            reduce_by, extend_by = self._cascade_adjustment(inter_id, active_phase, cascade_commands)
+            eff_max = phase_state.max_duration + extend_by - reduce_by
+            eff_max = max(
+                phase_state.min_duration,
+                min(eff_max, phase_state.max_duration + CASCADE_MAX_EXTEND),
+            )
+
+            if elapsed >= eff_max:
                 # Фаза горит слишком долго — переключаемся на лучшую другую
                 active_phase = self._pick_phase(phase_names, phase_cars, exclude=active_phase)
                 self.phase_manager.switch_phase(inter_id, active_phase)
@@ -252,11 +282,47 @@ class TrafficOrchestrator:
         total_cars = sum(phase_cars.values())
         if total_cars > 0 and active_phase:
             load = phase_cars.get(active_phase, 0) / max(total_cars, 1)
-            green_duration = min(25.0, max(8.0, 10.0 + load * 15.0))
+            green_duration = min(
+                GREEN_DURATION_MAX,
+                max(GREEN_DURATION_MIN,
+                    GREEN_DURATION_BASE + load * GREEN_DURATION_LOAD_SPAN),
+            )
         else:
-            green_duration = 10.0
+            green_duration = GREEN_DURATION_BASE
 
         return green_duration
+
+    def _get_cascade_commands(self) -> List[dict]:
+        """Команды каскадного metering от cloud-тикера (пусто, если облака нет)."""
+        if not self.cloud:
+            return []
+        return self.cloud.get_cascade_commands()
+
+    def _cascade_adjustment(self, inter_id: str, active_phase: Optional[str],
+                            cascade_commands: Optional[List[dict]]) -> Tuple[float, float]:
+        """Суммарная урезка/продление зелёного активной фазы от каскада.
+
+        Возвращает (reduce_by, extend_by) в секундах. Команда учитывается,
+        только если её подход принадлежит активной фазе — иначе мы бы укоротили
+        (или продлили) не тот зелёный.
+        """
+        reduce_by = 0.0
+        extend_by = 0.0
+        if not active_phase or not cascade_commands:
+            return reduce_by, extend_by
+
+        for cmd in cascade_commands:
+            if cmd.get("target_intersection") != inter_id:
+                continue
+            approach = cmd.get("approach")
+            if approach and traffic_network.get_phase_for_approach(inter_id, approach) != active_phase:
+                continue
+            action = cmd.get("action")
+            if action == "REDUCE_GREEN":
+                reduce_by += float(cmd.get("reduce_green_by", 0.0))
+            elif action == "GREEN_WAVE":
+                extend_by += float(cmd.get("extend_green_by", 0.0))
+        return reduce_by, extend_by
 
     def _count_phase_cars(self, inter_id: str, phase_names: List[str]) -> Dict[str, int]:
         """Сумма машин по фазам ТОЛЬКО указанного перекрёстка.
