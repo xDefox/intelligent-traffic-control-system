@@ -143,6 +143,16 @@ class TrafficUIFactory:
             bgcolor="#1e1e2e", padding=15, border_radius=10,
         )
         
+        # --- Таблица подходов ---
+        self.lane_table_container = ft.Column(spacing=4)
+        lane_table_section = ft.Container(
+            content=ft.Column([
+                ft.Text("🛣 Таблица подходов", size=16, weight=ft.FontWeight.BOLD),
+                self.lane_table_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+
         # --- График загрузки сети во времени ---
         self.network_chart = cv.Canvas(width=660, height=180)
         network_section = ft.Container(
@@ -180,6 +190,8 @@ class TrafficUIFactory:
                 ft.Divider(),
                 ft.Column([
                     network_section,
+                    ft.Divider(height=8, color="transparent"),
+                    lane_table_section,
                     ft.Divider(height=8, color="transparent"),
                     ranking_section,
                     ft.Divider(height=8, color="transparent"),
@@ -406,6 +418,9 @@ class TrafficUIFactory:
         # --- График сети во времени ---
         self._draw_network_chart(stats)
 
+        # --- Таблица подходов ---
+        self._draw_lane_table()
+
         # --- Тренды ---
         self.trend_container.controls.clear()
         for r in ranking:
@@ -547,6 +562,52 @@ class TrafficUIFactory:
                 shapes.append(cv.Line(x1, y1, x2, y2, paint=ft.Paint(color=color, stroke_width=2)))
 
         self.network_chart.shapes = shapes
+
+    def _draw_lane_table(self):
+        """Числовая таблица по всем подходам (машины, загрузка, фаза, свет)."""
+        rows_data = sorted(
+            self.lane_state.values(),
+            key=lambda x: (x["intersection_id"], x["lane_id"]),
+        )
+        self.lane_table_container.controls.clear()
+        if not rows_data:
+            self.lane_table_container.controls.append(
+                ft.Text("нет данных по подходам", size=11, color="grey")
+            )
+            return
+
+        def short_inter(iid: str) -> str:
+            return iid.replace("intersection_", "i")
+
+        def short_approach(lane_id: str) -> str:
+            if "_approach_" in lane_id:
+                return "approach_" + lane_id.rsplit("_approach_", 1)[-1]
+            return lane_id
+
+        table = ft.DataTable(
+            columns=[ft.DataColumn(ft.Text(h, size=11)) for h in
+                     ["Перекрёсток", "Подход", "Фаза", "Машины", "Загр.", "Свет"]],
+            rows=[],
+            heading_row_height=30,
+            data_row_min_height=26,
+            data_row_max_height=34,
+            column_spacing=18,
+        )
+        for r in rows_data:
+            load = r["load_ratio"]
+            color = "red" if load > 0.7 else ("orange" if load > 0.4 else "green")
+            table.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(short_inter(r["intersection_id"]), size=11)),
+                ft.DataCell(ft.Text(short_approach(r["lane_id"]), size=11)),
+                ft.DataCell(ft.Text(str(r["phase"]), size=11)),
+                ft.DataCell(ft.Text(f"{r['car_count']}/{r['max_capacity']}", size=11)),
+                ft.DataCell(ft.Text(f"{load * 100:.0f}%", size=11, color=color)),
+                ft.DataCell(ft.Container(width=12, height=12, border_radius=6,
+                                         bgcolor=self._light_to_color(r["light"]))),
+            ]))
+        self.lane_table_container.controls.append(
+            ft.Row([table], scroll=ft.ScrollMode.AUTO)
+        )
 
     async def connect_to_backend(self):
         uri = f"ws://{os.getenv('WS_HOST', '127.0.0.1')}:{os.getenv('WS_PORT', '8050')}/ws/monitor"
