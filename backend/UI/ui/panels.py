@@ -32,8 +32,13 @@ class TrafficUIFactory:
 
         self._inter_phase = {}
         self._inter_congestion = {}
+        self._inter_cars = {}
 
-        self.map = TrafficMap()
+        # Данные по полосам для таблицы/деталей: {global_key: {...}}
+        self.lane_state = {}
+
+        self.map = TrafficMap(on_node_click=self._on_map_node_click)
+        self._selected_intersection = None
 
         self._pending_lane_updates = []
         self._pending_cloud_states = []
@@ -179,22 +184,37 @@ class TrafficUIFactory:
             ], scroll=ft.ScrollMode.AUTO, expand=True),
         )
 
+        # ===== Вкладка "Карта" =====
+        self.detail_container = ft.Container(
+            content=self._detail_placeholder(),
+            bgcolor="#1e1e2e", padding=16, border_radius=12,
+            width=380, height=560, alignment=ft.Alignment.TOP_LEFT,
+        )
+        map_tab = ft.Container(
+            alignment=ft.Alignment.TOP_LEFT,
+            content=ft.Row([
+                self.map.container,
+                self.detail_container,
+            ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True),
+        )
+
         # ===== Табы =====
         self.tab_bar = ft.TabBar(
             tab_alignment=ft.TabAlignment.START,
             tabs=[
                 ft.Tab(label=ft.Text("📋 Список")),
+                ft.Tab(label=ft.Text("🗺 Карта")),
                 ft.Tab(label=ft.Text("📈 Статистика")),
             ],
         )
 
         self.tab_bar_view = ft.TabBarView(
             expand=True,
-            controls=[list_tab, stats_tab],
+            controls=[list_tab, map_tab, stats_tab],
         )
 
         self.tabs = ft.Tabs(
-            length=2,
+            length=3,
             selected_index=0,
             expand=True,
             content=ft.Column(
@@ -551,6 +571,7 @@ class TrafficUIFactory:
             congestion_pct = int(summary.get("avg_congestion", 0) * 100)
             lanes_count = summary.get("total_lanes", 0)
             self._inter_congestion[inter_id] = f"{congestion_pct}% | Полос: {lanes_count}"
+            self._inter_cars[inter_id] = summary.get("total_cars", 0)
             self._refresh_header(inter_id)
         
         # Сохраняем полную статистику из бэкенда (там же наполняются time series и т.д.)
@@ -639,6 +660,16 @@ class TrafficUIFactory:
                 card_data["load_bar"].color = "green"
             card_data["light"].bgcolor = self._light_to_color(light_cmd)
 
+            self.lane_state[global_key] = {
+                "intersection_id": inter_id,
+                "lane_id": display_lane_id,
+                "car_count": car_count,
+                "max_capacity": max_capacity,
+                "load_ratio": load_ratio,
+                "phase": phase_name,
+                "light": light_cmd,
+            }
+
         if cards_to_rebuild:
             # Каждая дорога — отдельная строка (для 4 камер будет 4 строки,
             # 4 кружка и 4 шкалы заполненности).
@@ -647,6 +678,102 @@ class TrafficUIFactory:
             belonging_cards = [info["card"] for info in self.lane_cards.values() if info["inter_id"] == inter_id]
             for card in belonging_cards:
                 lanes_layout.controls.append(card)
+
+    # ===================== КАРТА: ДЕТАЛИ ПЕРЕКРЁСТКА =====================
+
+    def _detail_placeholder(self) -> ft.Control:
+        return ft.Column([
+            ft.Text("🗺 Детали перекрёстка", size=18, weight=ft.FontWeight.BOLD),
+            ft.Divider(height=8),
+            ft.Text("Нажмите на узел на карте, чтобы увидеть\nзагрузку, фазу, подходы и график.",
+                    size=12, color="grey"),
+        ], spacing=6)
+
+    def _on_map_node_click(self, inter_id: str):
+        """Клик по узлу карты: детали + асинхронная загрузка истории."""
+        self._selected_intersection = inter_id
+        self._render_detail(inter_id, history=None)
+        if self.page:
+            self.page.run_task(self._load_detail_history, inter_id)
+
+    def _render_detail(self, inter_id: str, history):
+        congestion = self._inter_congestion.get(inter_id, "")
+        cars = self._inter_cars.get(inter_id, 0)
+        phase = self._inter_phase.get(inter_id, "?")
+
+        lanes = sorted(
+            (v for v in self.lane_state.values() if v["intersection_id"] == inter_id),
+            key=lambda x: x["lane_id"],
+        )
+        lane_rows = []
+        for ln in lanes:
+            c = ln["load_ratio"]
+            color = "red" if c > 0.7 else ("orange" if c > 0.4 else "green")
+            light = self._light_to_color(ln["light"])
+            lane_rows.append(ft.Row([
+                ft.Container(width=12, height=12, border_radius=6, bgcolor=light),
+                ft.Text(ln["lane_id"], size=11, expand=True),
+                ft.Text(f"{ln['car_count']}/{ln['max_capacity']}", size=11, color="grey"),
+                ft.ProgressBar(value=c, width=70, color=color, bgcolor="#333333"),
+            ], spacing=6))
+
+        controls = [
+            ft.Text(f"🛑 {inter_id}", size=18, weight=ft.FontWeight.BOLD),
+            ft.Text(f"Фаза: {phase}   |   Загрузка: {congestion}", size=12, color="grey"),
+            ft.Text(f"Машин: {cars}", size=12, color="grey"),
+            ft.Divider(height=8),
+            ft.Text("📈 Загрузка (5 мин)", size=14, weight=ft.FontWeight.BOLD),
+            self._sparkline(history),
+            ft.Divider(height=8),
+            ft.Text("🛣 Подходы", size=14, weight=ft.FontWeight.BOLD),
+        ]
+        controls.extend(lane_rows or [ft.Text("нет данных по полосам", size=11, color="grey")])
+        self.detail_container.content = ft.Column(controls, spacing=6, scroll=ft.ScrollMode.AUTO)
+        if self.page:
+            self.page.update()
+
+    def _sparkline(self, history) -> ft.Control:
+        """Мини-график загрузки (canvas-линия) по истории перекрёстка."""
+        width, height = 340, 90
+        if not history:
+            return ft.Text("нет истории", size=11, color="grey")
+        values = [h.get("avg_congestion", 0.0) for h in history][-120:]
+        n = len(values)
+        if n < 2:
+            return ft.Text("мало данных", size=11, color="grey")
+
+        step = width / (n - 1)
+        shapes = [
+            cv.Line(0, height, width, height, paint=ft.Paint(color="#444444", stroke_width=1)),
+            cv.Line(0, height * 0.3, width, height * 0.3, paint=ft.Paint(color="#552222", stroke_width=1)),
+        ]
+        points = [(i * step, height - min(1.0, v) * height) for i, v in enumerate(values)]
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            color = "red" if y2 < height * 0.3 else "cyan"
+            shapes.append(cv.Line(x1, y1, x2, y2, paint=ft.Paint(color=color, stroke_width=2)))
+        return cv.Canvas(shapes=shapes, width=width, height=height)
+
+    async def _load_detail_history(self, inter_id: str):
+        history = []
+        try:
+            import httpx
+            host = os.getenv("BACKEND_HOST", "127.0.0.1")
+            port = os.getenv("BACKEND_PORT", "8050")
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"http://{host}:{port}/api/v1/statistics/intersection/{inter_id}",
+                    params={"seconds": 300},
+                )
+                history = resp.json().get("history", [])
+        except Exception:
+            # Fallback: тот же процесс (бэкенд и UI запущены вместе).
+            try:
+                from backend.services.statistics import traffic_stats
+                history = traffic_stats.get_intersection_timeseries(inter_id, 300)
+            except Exception:
+                history = []
+        if self._selected_intersection == inter_id:
+            self._render_detail(inter_id, history)
 
     def on_filter_change(self, e):
         self.filter_dropdown.value = e.control.value

@@ -127,6 +127,19 @@ async def get_statistics():
     return traffic_stats.get_full_statistics()
 
 
+@app.get("/api/v1/statistics/intersection/{intersection_id}")
+async def get_intersection_statistics(
+    intersection_id: str,
+    seconds: int = Query(300, ge=1, le=86400, description="Окно истории в секундах"),
+):
+    """История загрузки перекрёстка (time series) — для карты/графиков."""
+    from backend.services.statistics import traffic_stats
+    return {
+        "intersection_id": intersection_id,
+        "history": traffic_stats.get_intersection_timeseries(intersection_id, seconds),
+    }
+
+
 @app.get("/api/v1/statistics/{lane_id}")
 async def get_lane_statistics(
     lane_id: str,
