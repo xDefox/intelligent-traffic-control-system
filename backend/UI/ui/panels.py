@@ -1,6 +1,7 @@
 import flet as ft
 import flet.canvas as cv
 import asyncio
+import csv
 import json
 import os
 import time
@@ -178,6 +179,14 @@ class TrafficUIFactory:
             alignment=ft.Alignment.TOP_LEFT,
             content=ft.Column([
                 ft.Text("📈 Аналитика трафика", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                ft.Row([
+                    ft.Button(
+                        content=ft.Text("💾 Экспорт CSV"),
+                        icon=ft.Icons.SAVE_ALT,
+                        on_click=self._export_csv,
+                    ),
+                ]),
                 ft.Divider(),
                 ft.Row([
                     self.uptime_text,
@@ -608,6 +617,50 @@ class TrafficUIFactory:
         self.lane_table_container.controls.append(
             ft.Row([table], scroll=ft.ScrollMode.AUTO)
         )
+
+    def _export_csv(self, e=None):
+        """Выгрузить текущие метрики сети и подходов в CSV-файл."""
+        try:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            export_dir = os.path.join(base_dir, "exports")
+            os.makedirs(export_dir, exist_ok=True)
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            path = os.path.join(export_dir, f"traffic_{ts}.csv")
+
+            stats = self._last_statistics or {}
+            summary = stats.get("network_summary", {})
+            ranking = {r.get("intersection_id"): r
+                       for r in stats.get("congestion_ranking", [])}
+
+            with open(path, "w", newline="", encoding="utf-8") as fp:
+                writer = csv.writer(fp)
+                writer.writerow(["# Traffic export", time.strftime("%Y-%m-%d %H:%M:%S")])
+                for key in ("uptime_display", "total_phase_switches",
+                            "total_emergency_events", "total_green_wave_events",
+                            "total_anomalies"):
+                    if key in summary:
+                        writer.writerow([f"# {key}", summary[key]])
+                writer.writerow([])
+
+                writer.writerow(["intersection", "approach", "phase", "cars",
+                                 "capacity", "load_pct", "light", "avg_speed"])
+                for r in sorted(self.lane_state.values(),
+                                key=lambda x: (x["intersection_id"], x["lane_id"])):
+                    writer.writerow([
+                        r["intersection_id"], r["lane_id"], r["phase"],
+                        r["car_count"], r["max_capacity"],
+                        f"{r['load_ratio'] * 100:.0f}", r["light"],
+                        ranking.get(r["intersection_id"], {}).get("avg_speed", ""),
+                    ])
+
+            msg = f"💾 Сохранено: {path}"
+            debug("AdminPanel", f"CSV export: {path}")
+        except Exception as ex:
+            msg = f"Ошибка экспорта: {ex}"
+            error("AdminPanel", f"CSV export failed: {ex}")
+
+        if self.page:
+            self.page.show_dialog(ft.SnackBar(ft.Text(msg)))
 
     async def connect_to_backend(self):
         uri = f"ws://{os.getenv('WS_HOST', '127.0.0.1')}:{os.getenv('WS_PORT', '8050')}/ws/monitor"

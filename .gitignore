@@ -29,6 +29,7 @@ Scene/Diplom_scene/usersettings/
 Scene/Diplom_scene/.plastic/
 
 backend/core/runs/
+backend/UI/exports/
 *.pt
 *.onnx
 #Нейросеть
