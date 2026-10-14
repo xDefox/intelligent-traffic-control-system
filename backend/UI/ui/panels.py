@@ -143,6 +143,16 @@ class TrafficUIFactory:
             bgcolor="#1e1e2e", padding=15, border_radius=10,
         )
         
+        # --- График загрузки сети во времени ---
+        self.network_chart = cv.Canvas(width=660, height=180)
+        network_section = ft.Container(
+            content=ft.Column([
+                ft.Text("📉 Загрузка сети во времени (5 мин)", size=16, weight=ft.FontWeight.BOLD),
+                self.network_chart,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+
         # --- Аномалии ---
         self.anomaly_log_container = ft.Column(spacing=4)
         anomaly_section = ft.Container(
@@ -169,6 +179,8 @@ class TrafficUIFactory:
                 ], spacing=16, wrap=True),
                 ft.Divider(),
                 ft.Column([
+                    network_section,
+                    ft.Divider(height=8, color="transparent"),
                     ranking_section,
                     ft.Divider(height=8, color="transparent"),
                     self.congestion_canvas_container,
@@ -391,6 +403,9 @@ class TrafficUIFactory:
         # --- График загрузки ---
         self._draw_congestion_chart(stats)
 
+        # --- График сети во времени ---
+        self._draw_network_chart(stats)
+
         # --- Тренды ---
         self.trend_container.controls.clear()
         for r in ranking:
@@ -509,6 +524,29 @@ class TrafficUIFactory:
             chart_controls.append(bar_row)
 
         self.congestion_canvas_container.content = ft.Column(chart_controls, spacing=6)
+
+    def _draw_network_chart(self, stats: dict):
+        """Линия средней загрузки сети во времени (canvas)."""
+        width, height = 660, 180
+        series = stats.get("network_timeseries", [])
+
+        shapes = []
+        for frac in (0.25, 0.5, 0.75):
+            y = height * frac
+            shapes.append(cv.Line(0, y, width, y, paint=ft.Paint(color="#2a2a3a", stroke_width=1)))
+        y70 = height * (1 - 0.7)
+        shapes.append(cv.Line(0, y70, width, y70, paint=ft.Paint(color="#663333", stroke_width=1)))
+
+        if len(series) >= 2:
+            vals = [min(1.0, max(0.0, s.get("avg_congestion", 0.0))) for s in series][-300:]
+            n = len(vals)
+            step = width / (n - 1)
+            pts = [(i * step, height - v * height) for i, v in enumerate(vals)]
+            for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+                color = "red" if max(y1, y2) < y70 else "cyan"
+                shapes.append(cv.Line(x1, y1, x2, y2, paint=ft.Paint(color=color, stroke_width=2)))
+
+        self.network_chart.shapes = shapes
 
     async def connect_to_backend(self):
         uri = f"ws://{os.getenv('WS_HOST', '127.0.0.1')}:{os.getenv('WS_PORT', '8050')}/ws/monitor"

@@ -193,6 +193,9 @@ class TrafficStatistics:
         self.green_wave_events: deque = deque(maxlen=50)
         self._current_green_wave: Optional[GreenWaveEvent] = None
         
+        # История по ВСЕЙ сети (агрегат по тикам cloud) — для графиков
+        self.network_history: deque = deque(maxlen=MAX_HISTORY_SIZE)
+        
         # Глобальная статистика
         self._start_time = time.time()
         self._total_emergency_events = 0
@@ -253,6 +256,19 @@ class TrafficStatistics:
         """Записать переключение фазы"""
         analytics = self.get_or_create(intersection_id)
         analytics.total_phase_switches += 1
+
+    def record_network_snapshot(self, total_cars: int, avg_congestion: float,
+                                active_intersections: int):
+        """Записать агрегат по всей сети (вызывается cloud-тикером раз в секунду).
+
+        Служит основой для графика «загрузка сети во времени».
+        """
+        self.network_history.append({
+            "timestamp": time.time(),
+            "total_cars": total_cars,
+            "avg_congestion": round(avg_congestion, 3),
+            "active_intersections": active_intersections,
+        })
     
     def start_emergency(self, intersection_id: str, approach: str, phase: str, cascade: List[str] = None):
         """Начать emergency-событие"""
@@ -429,8 +445,14 @@ class TrafficStatistics:
             "emergency_log": self.get_emergency_log(),
             "green_wave_log": self.get_green_wave_log(),
             "anomaly_log": self.get_anomaly_log(),
+            "network_timeseries": self.get_network_timeseries(300),
         }
     
+    def get_network_timeseries(self, seconds: int = 300) -> List[dict]:
+        """История загруженности ВСЕЙ сети (для графика во времени)."""
+        cutoff = time.time() - seconds
+        return [s for s in self.network_history if s["timestamp"] >= cutoff]
+
     def get_intersection_timeseries(
         self, intersection_id: str, seconds: int = 300
     ) -> List[dict]:

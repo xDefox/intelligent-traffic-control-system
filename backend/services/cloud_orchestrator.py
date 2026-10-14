@@ -243,6 +243,12 @@ class CloudOrchestrator:
                 traffic_stats.record_phase_switch(iid)
             self._prev_intersection_phases[iid] = current_phase
 
+        # Агрегат по сети (для графика загрузки во времени) — раз в тик.
+        if inter_summary:
+            total_cars = sum(s["total_cars"] for s in inter_summary.values())
+            avg_cong = sum(s["avg_congestion"] for s in inter_summary.values()) / len(inter_summary)
+            traffic_stats.record_network_snapshot(total_cars, avg_cong, len(inter_summary))
+
     async def _broadcast_state(self, commands: List[dict], total_cars: int,
                                inter_summary: Dict[str, dict]):
         """Рассылка состояния через WebSocket для админ-панели."""
