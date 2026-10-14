@@ -154,6 +154,16 @@ class TrafficUIFactory:
             bgcolor="#1e1e2e", padding=15, border_radius=10,
         )
 
+        # --- Адаптив vs фиксированный таймер (оценка) ---
+        self.fixed_adaptive_container = ft.Column(spacing=4)
+        fixed_adaptive_section = ft.Container(
+            content=ft.Column([
+                ft.Text("⚖ Адаптив vs фиксированный таймер (оценка)", size=16, weight=ft.FontWeight.BOLD),
+                self.fixed_adaptive_container,
+            ]),
+            bgcolor="#1e1e2e", padding=15, border_radius=10,
+        )
+
         # --- График загрузки сети во времени ---
         self.network_chart = cv.Canvas(width=660, height=180)
         network_section = ft.Container(
@@ -201,6 +211,8 @@ class TrafficUIFactory:
                     network_section,
                     ft.Divider(height=8, color="transparent"),
                     lane_table_section,
+                    ft.Divider(height=8, color="transparent"),
+                    fixed_adaptive_section,
                     ft.Divider(height=8, color="transparent"),
                     ranking_section,
                     ft.Divider(height=8, color="transparent"),
@@ -429,6 +441,9 @@ class TrafficUIFactory:
 
         # --- Таблица подходов ---
         self._draw_lane_table()
+
+        # --- Адаптив vs фикс ---
+        self._draw_fixed_vs_adaptive()
 
         # --- Тренды ---
         self.trend_container.controls.clear()
@@ -661,6 +676,72 @@ class TrafficUIFactory:
 
         if self.page:
             self.page.show_dialog(ft.SnackBar(ft.Text(msg)))
+
+    def _estimate_fixed_vs_adaptive(self):
+        """Оценка выигрыша адаптивного распределения зелёного против равного фикс. таймера.
+
+        Идеализированная модель (НЕ замер реальных задержек):
+          - спрос фазы = суммарное число машин на её подходах;
+          - адаптив отдаёт фазе долю зелёного ∝ её спросу;
+          - фиксированный таймер делит зелёное поровну между фазами (1/n).
+        Считаем долю зелёного для критичной (самой загруженной) фазы и
+        долю обслуживаемого спроса при фиксированном плане.
+        """
+        by_inter: dict[str, dict[str, int]] = {}
+        for r in self.lane_state.values():
+            by_inter.setdefault(r["intersection_id"], {}).setdefault(r["phase"], 0)
+            by_inter[r["intersection_id"]][r["phase"]] += r["car_count"]
+
+        rows = []
+        tot_dem = w_adapt = w_fixed = w_service = 0.0
+        for iid, phases in by_inter.items():
+            n = len(phases)
+            total = sum(phases.values())
+            if n < 2 or total <= 0:
+                continue
+            cap = total / n
+            served = sum(min(d, cap) for d in phases.values())
+            service = served / total
+            crit = max(phases, key=phases.get)
+            adapt_share = phases[crit] / total
+            fixed_share = 1.0 / n
+            rows.append({"id": iid, "critical": crit, "adapt": adapt_share,
+                         "fixed": fixed_share, "service": service,
+                         "n": n, "total": total})
+            tot_dem += total
+            w_adapt += adapt_share * total
+            w_fixed += fixed_share * total
+            w_service += service * total
+
+        if tot_dem == 0:
+            return None
+        return {"rows": rows, "adapt": w_adapt / tot_dem,
+                "fixed": w_fixed / tot_dem, "service": w_service / tot_dem,
+                "total_demand": tot_dem}
+
+    def _draw_fixed_vs_adaptive(self):
+        self.fixed_adaptive_container.controls.clear()
+        est = self._estimate_fixed_vs_adaptive()
+        if not est:
+            self.fixed_adaptive_container.controls.append(
+                ft.Text("недостаточно данных (нужно ≥2 фазы с трафиком)", size=11, color="grey")
+            )
+            return
+        a = est["adapt"] * 100
+        f = est["fixed"] * 100
+        s = est["service"] * 100
+        self.fixed_adaptive_container.controls.append(ft.Text(
+            f"Критичная (самая загруженная) фаза получает {a:.0f}% зелёного при адаптиве "
+            f"против {f:.0f}% при равном фикс. таймере.", size=12))
+        self.fixed_adaptive_container.controls.append(ft.Text(
+            f"Оценка обслуживаемого спроса: адаптив ≈100% (по построению), "
+            f"фикс. таймер ≈{s:.0f}%.", size=12,
+            color=("green" if s >= 90 else "orange")))
+        for r in est["rows"]:
+            self.fixed_adaptive_container.controls.append(ft.Text(
+                f"  • {r['id'].replace('intersection_', 'i')}: критична {r['critical']}; "
+                f"адаптив {r['adapt'] * 100:.0f}% / фикс {r['fixed'] * 100:.0f}%; "
+                f"обслуживание фикс ≈{r['service'] * 100:.0f}%", size=11, color="grey"))
 
     async def connect_to_backend(self):
         uri = f"ws://{os.getenv('WS_HOST', '127.0.0.1')}:{os.getenv('WS_PORT', '8050')}/ws/monitor"
