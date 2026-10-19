@@ -7,9 +7,6 @@
 Формат lane_id: "lane_intersection_1_approach_0" или "intersection_1_approach_0"
 """
 
-from typing import Tuple
-
-
 def normalize_lane_id(lane_id: str) -> str:
     """
     Добавить префикс 'lane_' если его нет.
@@ -33,10 +30,10 @@ def denormalize_lane_id(lane_id: str) -> str:
     """
     if not lane_id:
         return lane_id
-    return lane_id[5:] if lane_id.startswith("lane_") else lane_id
+    return lane_id.removeprefix("lane_")
 
 
-def parse_lane_id(lane_id: str) -> Tuple[str, str]:
+def parse_lane_id(lane_id: str) -> tuple[str, str]:
     """
     Разобрать lane_id на (intersection_id, approach).
 
@@ -50,8 +47,7 @@ def parse_lane_id(lane_id: str) -> Tuple[str, str]:
         return ("unknown", "")
 
     # Убираем префикс "lane_"
-    if lane_id.startswith("lane_"):
-        lane_id = lane_id[5:]
+    lane_id = lane_id.removeprefix("lane_")
 
     idx = lane_id.find("_approach_")
     if idx == -1:
