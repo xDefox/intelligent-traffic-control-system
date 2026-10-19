@@ -32,6 +32,9 @@ backend/core/runs/
 backend/UI/exports/
 *.pt
 *.onnx
+# веса моделей не храним в git (>100 МБ, regeneratable); .meta к отсутствующему
+# ассету тоже не нужен — Unity пересоздаст его при добавлении модели
+*.onnx.meta
 #Нейросеть
 backend/core/low_poly-cars-1
 backend/core/low_poly-cars-2
