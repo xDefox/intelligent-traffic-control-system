@@ -1,6 +1,6 @@
 # backend/models/traffic.py
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 
 class LaneDetectionDTO(BaseModel):
@@ -16,17 +16,17 @@ class LaneDetectionDTO(BaseModel):
 class CameraTelemetryDTO(BaseModel):
     """Телеметрия от одной камеры внутри batch-запроса"""
     camera_id: str
-    lanes: List[LaneDetectionDTO]
+    lanes: list[LaneDetectionDTO]
     # Camera-First Design: метаданные камеры для автоматического построения графа
-    direction: Optional[str] = Field(
+    direction: str | None = Field(
         default=None,
         description="Направление камеры: N, S, E, W (определяется из transform.forward)"
     )
-    world_position: Optional[dict] = Field(
+    world_position: dict | None = Field(
         default=None,
         description="Мировые координаты камеры: {x, y, z}"
     )
-    world_rotation: Optional[dict] = Field(
+    world_rotation: dict | None = Field(
         default=None,
         description="Мировой rotation камеры: {x, y, z} (euler angles)"
     )
@@ -34,7 +34,7 @@ class CameraTelemetryDTO(BaseModel):
         default=False,
         description="True если камера детектировала спецтранспорт (полиция, скорая, пожарные)"
     )
-    emergency_approach: Optional[str] = Field(
+    emergency_approach: str | None = Field(
         default=None,
         description="Подход на котором обнаружен спецтранспорт (например 'approach_0')"
     )
@@ -43,7 +43,7 @@ class CameraTelemetryDTO(BaseModel):
 class BatchTelemetryDTO(BaseModel):
     """Batch-телеметрия: все камеры одного перекрёстка в одном запросе"""
     intersection_id: str
-    cameras: List[CameraTelemetryDTO]
+    cameras: list[CameraTelemetryDTO]
 
 
 class SingleResponseDTO(BaseModel):
@@ -60,12 +60,12 @@ class SingleResponseDTO(BaseModel):
 class BatchResponseDTO(BaseModel):
     """Ответ на batch-телеметрию"""
     type: str = "batch_response"
-    responses: List[SingleResponseDTO]
+    responses: list[SingleResponseDTO]
     emergency_corridor_active: bool = Field(
         default=False,
         description="Активен ли зелёный коридор на этом перекрёстке"
     )
-    emergency_corridor_phase: Optional[str] = Field(
+    emergency_corridor_phase: str | None = Field(
         default=None,
         description="Фаза зелёного коридора (например 'EW' или 'NS')"
     )

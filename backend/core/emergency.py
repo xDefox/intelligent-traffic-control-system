@@ -5,7 +5,7 @@
 Раньше эта логика дублировалась в orchestrator.py и main.py.
 """
 
-from typing import Optional, Tuple, List
+
 from backend.models.traffic import BatchTelemetryDTO, CameraTelemetryDTO
 from backend.services.graph_manager import traffic_network
 
@@ -21,7 +21,7 @@ class EmergencyDetector:
     """
 
     @staticmethod
-    def detect(batch: BatchTelemetryDTO) -> Tuple[bool, Optional[str], Optional[str]]:
+    def detect(batch: BatchTelemetryDTO) -> tuple[bool, str | None, str | None]:
         """
         Проверить batch на наличие спецтранспорта.
 
@@ -39,7 +39,7 @@ class EmergencyDetector:
         return (False, None, None)
 
     @staticmethod
-    def get_emergency_approaches(cameras: List[CameraTelemetryDTO]) -> List[str]:
+    def get_emergency_approaches(cameras: list[CameraTelemetryDTO]) -> list[str]:
         """Получить список всех подходов с обнаруженным спецтранспортом."""
         return [
             cam.emergency_approach

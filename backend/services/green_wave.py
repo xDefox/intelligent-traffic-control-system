@@ -10,7 +10,7 @@ Green Wave (Зелёный поток) система координации с�
 
 import math
 import time
-from typing import Dict, List, Tuple
+
 from backend.services.graph_manager import traffic_network
 
 
@@ -28,11 +28,11 @@ class GreenWaveCoordinator:
     GREEN_WINDOW = 20.0  # Окно зелёного в цикле (сек)
     
     def __init__(self):
-        self._active_waves: Dict[str, dict] = {}
+        self._active_waves: dict[str, dict] = {}
         self._last_calculation = 0
         self._calculation_interval = 5.0
         
-    def calculate_green_wave(self, force: bool = False) -> List[dict]:
+    def calculate_green_wave(self, force: bool = False) -> list[dict]:
         """
         Рассчитать команды для зелёной волны.
         Возвращает список команд с target_intersection, phase, и offset (сдвиг в секундах).
@@ -65,7 +65,7 @@ class GreenWaveCoordinator:
 
         return self._get_current_commands()
     
-    def _get_current_commands(self) -> List[dict]:
+    def _get_current_commands(self) -> list[dict]:
         """Вернуть команды с расчётом, активна ли сейчас зелёная волна"""
         result = []
         current_time = time.time()
@@ -83,7 +83,7 @@ class GreenWaveCoordinator:
         
         return result
     
-    def _find_corridors(self) -> List[List[str]]:
+    def _find_corridors(self) -> list[list[str]]:
         """
         Найти линейные коридоры в дорожной сети.
 
@@ -98,13 +98,13 @@ class GreenWaveCoordinator:
             return []
 
         # adj[inter][axis] = множество соседей вдоль этой оси
-        adj: Dict[str, Dict[str, set]] = {}
+        adj: dict[str, dict[str, set]] = {}
         for a, b, axis in links:
             adj.setdefault(a, {}).setdefault(axis, set()).add(b)
             adj.setdefault(b, {}).setdefault(axis, set()).add(a)
 
         used_edges = set()
-        corridors: List[List[str]] = []
+        corridors: list[list[str]] = []
 
         for a, b, axis in links:
             edge = (min(a, b), max(a, b))
@@ -118,7 +118,7 @@ class GreenWaveCoordinator:
 
         return corridors
 
-    def _collect_axis_links(self) -> List[Tuple[str, str, str]]:
+    def _collect_axis_links(self) -> list[tuple[str, str, str]]:
         """Рёбра между разными перекрёстками с указанием оси (x для EW, z для NS)."""
         links = []
         seen = set()
@@ -134,7 +134,7 @@ class GreenWaveCoordinator:
         return links
 
     def _extend_straight(self, a: str, b: str, axis: str,
-                         adj: Dict[str, Dict[str, set]]) -> List[str]:
+                         adj: dict[str, dict[str, set]]) -> list[str]:
         """Продолжить цепочку a-b в обе стороны строго вдоль оси axis."""
         chain = [a, b]
 
@@ -160,7 +160,7 @@ class GreenWaveCoordinator:
 
         return chain
     
-    def _calculate_corridor_sync(self, corridor: List[str]) -> List[dict]:
+    def _calculate_corridor_sync(self, corridor: list[str]) -> list[dict]:
         """
         Рассчитать синхронизацию для коридора.
         Каждый следующий перекрёсток получает offset = время проезда от первого.
@@ -189,7 +189,7 @@ class GreenWaveCoordinator:
         
         return commands
     
-    def _get_intersection_positions(self, corridor: List[str]) -> Dict[str, Tuple[float, float]]:
+    def _get_intersection_positions(self, corridor: list[str]) -> dict[str, tuple[float, float]]:
         """Получить позиции перекрёстков из конфига"""
         from backend.core.road_config import ROADS
         
@@ -202,7 +202,7 @@ class GreenWaveCoordinator:
         
         return positions
     
-    def _determine_main_axis(self, positions: Dict[str, Tuple[float, float]]) -> str:
+    def _determine_main_axis(self, positions: dict[str, tuple[float, float]]) -> str:
         """Определить основную ось коридора (x или z)."""
         if len(positions) < 2:
             return "x"
@@ -215,8 +215,8 @@ class GreenWaveCoordinator:
         
         return "x" if x_range >= z_range else "z"
     
-    def _calculate_travel_times(self, positions: Dict[str, Tuple[float, float]], 
-                                main_axis: str) -> List[float]:
+    def _calculate_travel_times(self, positions: dict[str, tuple[float, float]], 
+                                main_axis: str) -> list[float]:
         """Рассчитать время проезда между последовательными перекрёстками."""
         travel_times = []
         
@@ -239,7 +239,7 @@ class GreenWaveCoordinator:
         
         return travel_times
     
-    def get_active_waves(self) -> Dict[str, dict]:
+    def get_active_waves(self) -> dict[str, dict]:
         """Получить активные зелёные волны"""
         return self._active_waves.copy()
 

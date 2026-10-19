@@ -8,7 +8,6 @@ PhaseManager — единый источник истины о фазах све
 """
 
 import time
-from typing import Dict, Optional
 
 
 class PhaseState:
@@ -16,7 +15,7 @@ class PhaseState:
 
     def __init__(self, intersection_id: str):
         self.intersection_id = intersection_id
-        self.active_phase: Optional[str] = None
+        self.active_phase: str | None = None
         self.phase_start_time: float = 0
         self.min_duration: float = 8.0
         self.max_duration: float = 30.0
@@ -49,7 +48,7 @@ class PhaseManager:
     """
 
     def __init__(self):
-        self._states: Dict[str, PhaseState] = {}
+        self._states: dict[str, PhaseState] = {}
 
     def get_or_create(self, intersection_id: str) -> PhaseState:
         """Получить или создать состояние для перекрёстка"""
@@ -57,11 +56,11 @@ class PhaseManager:
             self._states[intersection_id] = PhaseState(intersection_id)
         return self._states[intersection_id]
 
-    def get_state(self, intersection_id: str) -> Optional[PhaseState]:
+    def get_state(self, intersection_id: str) -> PhaseState | None:
         """Получить существующее состояние (без создания)"""
         return self._states.get(intersection_id)
 
-    def get_active_phase(self, intersection_id: str) -> Optional[str]:
+    def get_active_phase(self, intersection_id: str) -> str | None:
         """Какая фаза сейчас активна на перекрёстке"""
         state = self._states.get(intersection_id)
         if state is None:

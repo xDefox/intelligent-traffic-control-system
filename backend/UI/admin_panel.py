@@ -1,5 +1,6 @@
-from backend.UI.ui.panels import TrafficUIFactory
 import flet as ft
+
+from backend.UI.ui.panels import TrafficUIFactory
 
 if __name__ == "__main__":
     ui_factory = TrafficUIFactory()

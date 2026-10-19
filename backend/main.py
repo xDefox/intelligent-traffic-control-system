@@ -1,15 +1,17 @@
 # backend/main.py
 import os
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
-from backend.models.traffic import BatchTelemetryDTO, BatchResponseDTO
-from backend.services.orchestrator import TrafficOrchestrator
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+
+from backend.models.traffic import BatchResponseDTO, BatchTelemetryDTO
 from backend.services.cloud_orchestrator import CloudOrchestrator
+from backend.services.orchestrator import TrafficOrchestrator
 
 
 @asynccontextmanager
@@ -49,7 +51,7 @@ class ConnectionManager:
         for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
-            except Exception:
+            except Exception:  # noqa: BLE001 — мёртвый сокет не должен ронять broadcast остальным
                 self.disconnect(connection)
 
 

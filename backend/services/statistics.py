@@ -10,13 +10,12 @@ Statistics Service - аналитическая система трафика.
 - Аномалии и превышения порогов
 """
 
-import time
 import math
-from typing import Dict, List, Optional
+import time
 from collections import deque
 from dataclasses import dataclass, field
-from backend.core.logger import info, warning
 
+from backend.core.logger import info, warning
 
 # Константы
 MAX_HISTORY_SIZE = 3600  # 1 час при 1 snapshot/сек
@@ -44,7 +43,7 @@ class EmergencyEvent:
     intersection_id: str
     approach: str
     phase: str
-    cascade_intersections: List[str] = field(default_factory=list)
+    cascade_intersections: list[str] = field(default_factory=list)
     duration: float = 0.0  # сколько секунд длился emergency
 
 
@@ -52,7 +51,7 @@ class EmergencyEvent:
 class GreenWaveEvent:
     """Запись о зелёной волне"""
     timestamp: float
-    corridor: List[str]  # цепочка перекрёстков
+    corridor: list[str]  # цепочка перекрёстков
     phase: str
     duration: float = 0.0
 
@@ -95,7 +94,7 @@ class IntersectionAnalytics:
             self.peak_congestion = snapshot.avg_congestion
             self.peak_congestion_time = snapshot.timestamp
     
-    def get_recent_congestion(self, seconds: int = 60) -> List[CongestionSnapshot]:
+    def get_recent_congestion(self, seconds: int = 60) -> list[CongestionSnapshot]:
         """Получить свежие снимки за последние N секунд"""
         cutoff = time.time() - seconds
         return [s for s in self.congestion_history if s.timestamp >= cutoff]
@@ -137,7 +136,7 @@ class IntersectionAnalytics:
             return "↘ falling"
         return "→ stable"
     
-    def detect_anomalies(self) -> List[AnomalyRecord]:
+    def detect_anomalies(self) -> list[AnomalyRecord]:
         """Обнаружить аномалии на основе последних данных"""
         found = []
         recent = self.get_recent_congestion(60)
@@ -183,15 +182,15 @@ class TrafficStatistics:
     """
     
     def __init__(self):
-        self.analytics: Dict[str, IntersectionAnalytics] = {}
+        self.analytics: dict[str, IntersectionAnalytics] = {}
         
         # Emergency логи
         self.emergency_events: deque = deque(maxlen=50)
-        self._current_emergency: Optional[EmergencyEvent] = None
+        self._current_emergency: EmergencyEvent | None = None
         
         # Green wave логи
         self.green_wave_events: deque = deque(maxlen=50)
-        self._current_green_wave: Optional[GreenWaveEvent] = None
+        self._current_green_wave: GreenWaveEvent | None = None
         
         # История по ВСЕЙ сети (агрегат по тикам cloud) — для графиков
         self.network_history: deque = deque(maxlen=MAX_HISTORY_SIZE)
@@ -209,7 +208,7 @@ class TrafficStatistics:
     def record_congestion_snapshot(
         self,
         intersection_id: str,
-        lane_congestions: Dict[str, float],
+        lane_congestions: dict[str, float],
         total_cars: int,
         active_lanes: int,
         phase: str = "UNKNOWN",
@@ -270,7 +269,7 @@ class TrafficStatistics:
             "active_intersections": active_intersections,
         })
     
-    def start_emergency(self, intersection_id: str, approach: str, phase: str, cascade: List[str] = None):
+    def start_emergency(self, intersection_id: str, approach: str, phase: str, cascade: list[str] | None = None):
         """Начать emergency-событие"""
         self._current_emergency = EmergencyEvent(
             timestamp=time.time(),
@@ -291,7 +290,7 @@ class TrafficStatistics:
                  f"({self._current_emergency.duration:.1f}s)")
             self._current_emergency = None
     
-    def start_green_wave(self, corridor: List[str], phase: str):
+    def start_green_wave(self, corridor: list[str], phase: str):
         """Начать зелёную волну"""
         self._current_green_wave = GreenWaveEvent(
             timestamp=time.time(),
@@ -315,7 +314,7 @@ class TrafficStatistics:
             info("Statistics", f"🟢 Green Wave END: ({self._current_green_wave.duration:.1f}s)")
             self._current_green_wave = None
     
-    def get_congestion_ranking(self) -> List[dict]:
+    def get_congestion_ranking(self) -> list[dict]:
         """
         Рейтинг перекрёстков по загруженности.
         Возвращает отсортированный список от самых загруженных к свободным.
@@ -345,7 +344,7 @@ class TrafficStatistics:
         rankings.sort(key=lambda r: r["avg_congestion"], reverse=True)
         return rankings
     
-    def get_emergency_log(self, limit: int = 20) -> List[dict]:
+    def get_emergency_log(self, limit: int = 20) -> list[dict]:
         """Последние emergency-события"""
         events = list(self.emergency_events)
         events.reverse()
@@ -361,7 +360,7 @@ class TrafficStatistics:
             for e in events[:limit]
         ]
     
-    def get_green_wave_log(self, limit: int = 20) -> List[dict]:
+    def get_green_wave_log(self, limit: int = 20) -> list[dict]:
         """Последние зелёные волны"""
         events = list(self.green_wave_events)
         events.reverse()
@@ -375,7 +374,7 @@ class TrafficStatistics:
             for e in events[:limit]
         ]
     
-    def get_anomaly_log(self, limit: int = 50) -> List[dict]:
+    def get_anomaly_log(self, limit: int = 50) -> list[dict]:
         """Последние аномалии по всем перекрёсткам"""
         all_anomalies = []
         for analytics in self.analytics.values():
@@ -448,14 +447,14 @@ class TrafficStatistics:
             "network_timeseries": self.get_network_timeseries(300),
         }
     
-    def get_network_timeseries(self, seconds: int = 300) -> List[dict]:
+    def get_network_timeseries(self, seconds: int = 300) -> list[dict]:
         """История загруженности ВСЕЙ сети (для графика во времени)."""
         cutoff = time.time() - seconds
         return [s for s in self.network_history if s["timestamp"] >= cutoff]
 
     def get_intersection_timeseries(
         self, intersection_id: str, seconds: int = 300
-    ) -> List[dict]:
+    ) -> list[dict]:
         """
         Time series данных загрузки для конкретного перекрёстка.
         Используется для построения графиков.

@@ -257,7 +257,7 @@ def print_report() -> None:
     out.append(f"| Цена внедрения для города (×{PRICE_MARKUP}) | {money(NEW_INT_PRICE)} | {money(REUSE_INT_PRICE)} |")
     out.append(f"| Годовая подписка SLA | {money(SLA_PRICE_INT)} | {money(SLA_PRICE_INT)} |")
     out.append(
-        f"| Референт | $8 000–$116 000 CAPEX/перекр-к, ~$10 000/год O&M (US DOT ITS JPO) | наш вариант — ретрофит, без замены светофоров |"
+        "| Референт | $8 000–$116 000 CAPEX/перекр-к, ~$10 000/год O&M (US DOT ITS JPO) | наш вариант — ретрофит, без замены светофоров |"
     )
     out.append("")
 
@@ -307,7 +307,7 @@ def print_report() -> None:
         n = npv(cf, r)
         ir = irr(cf)
         sp, dp = payback(cf, r)
-        out.append(f"**{PILOTS[key]['label']}** — {PILOTS[key]['note']}:")
+        out.append(f"**{pilot['label']}** — {pilot['note']}:")
         out.append("| Показатель | Значение (BYN) | Значение (USD) |")
         out.append("|---|---|---|")
         out.append(f"| Внедрение (г. 0) | {money(dc)} | {money_usd(dc)} |")
@@ -349,12 +349,12 @@ def print_report() -> None:
     vn = npv(vc, r)
     vir = irr(vc)
     vsp, vdp = payback(vc, r)
-    out.append(f"\n| Показатель (вендор) | Значение |")
+    out.append("\n| Показатель (вендор) | Значение |")
     out.append("|---|---|")
     out.append(f"| NPV (r=12%, 5 лет) | **{money(vn)} BYN** ({money_usd(vn)} USD) |")
     out.append(f"| IRR | {pct(vir) if isinstance(vir, float) else vir} |")
     out.append(f"| Окупаемость простая / дисконт. | {vsp:.1f} / {vdp:.1f} лет |")
-    out.append(f"| Точка безубыточности | в пределах года 3 (кумулятив становится ≥0) |")
+    out.append("| Точка безубыточности | в пределах года 3 (кумулятив становится ≥0) |")
     out.append("")
 
     out.append("## 7. Unit-экономика на перекрёсток\n")

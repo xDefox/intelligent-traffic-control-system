@@ -18,7 +18,10 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "black>=24.0.0",
-    "ruff>=0.4.0",
+    # ruff зафиксирован по minor: набор правил по умолчанию меняется между релизами,
+    # и без пина CI может внезапно «покраснеть» на новой версии.
+    "ruff>=0.17,<0.18",
+    "httpx>=0.27.0",  # нужен для fastapi.testclient (API-тесты)
 ]
 
 [project.scripts]
@@ -39,3 +42,7 @@ target-version = "py313"
 [tool.black]
 line-length = 120
 target-version = ["py313"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# backend импортируется как пакет (pip install -e .), pythonpath не требуется.

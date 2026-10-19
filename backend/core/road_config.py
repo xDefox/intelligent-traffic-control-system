@@ -21,7 +21,6 @@
 import json
 import os
 
-
 # Встроенный набор (используется, если нет внешнего road_network.json).
 # Легко править: добавьте словарь в "intersections" или строку в "links".
 DEFAULT_NETWORK = {

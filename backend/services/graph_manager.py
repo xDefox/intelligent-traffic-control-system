@@ -1,10 +1,10 @@
 # backend/services/graph_manager.py
 import asyncio
+
 import networkx as nx
-from typing import Dict, List, Optional, Tuple, Set
+
 from backend.core import road_config
 from backend.core.lane_utils import parse_lane_id
-
 
 # ---------------------------------------------------------------------------
 # Параметры каскадного управления (metering магистрали)
@@ -37,7 +37,7 @@ OPPOSITE_DIRECTION = {"E": "W", "W": "E", "N": "S", "S": "N"}
 # Утилиты разбора и генерации топологии
 # ---------------------------------------------------------------------------
 
-def _parse_links() -> List[Tuple[str, str]]:
+def _parse_links() -> list[tuple[str, str]]:
     """Преобразовать строчки вида 'a -> b' в пары (a, b)"""
     result = []
     for link_str in road_config.get_links():
@@ -55,7 +55,7 @@ def _axis_for_approach(approach_idx: int) -> str:
     return "EW" if approach_idx in (0, 1) else "NS"
 
 
-def generate_phases(approach_indices: Set[int]) -> Dict[str, dict]:
+def generate_phases(approach_indices: set[int]) -> dict[str, dict]:
     """
     СГЕНЕРИРОВАТЬ ФАЗЫ из набора подходов, присутствующих у перекрёстка.
 
@@ -70,7 +70,7 @@ def generate_phases(approach_indices: Set[int]) -> Dict[str, dict]:
     ew = sorted(f"approach_{i}" for i in approach_indices if i in (0, 1))
     ns = sorted(f"approach_{i}" for i in approach_indices if i in (2, 3))
 
-    phases: Dict[str, dict] = {}
+    phases: dict[str, dict] = {}
     if ew:
         phases["EW"] = {"approaches": ew, "min_duration": 5.0, "max_duration": 30.0}
     if ns:
@@ -104,16 +104,16 @@ class CityTrafficGraph:
 
     def __init__(self):
         self.graph = nx.DiGraph()
-        self.lane_pool: Dict[str, dict] = {}
+        self.lane_pool: dict[str, dict] = {}
         self.lane_pool_lock = asyncio.Lock()  # блокировка для async-доступа
-        self.intersection_max_capacity: Dict[str, int] = {}
-        self.intersection_phases: Dict[str, dict] = {}
-        self.intersection_approaches: Dict[str, Set[int]] = {}
+        self.intersection_max_capacity: dict[str, int] = {}
+        self.intersection_phases: dict[str, dict] = {}
+        self.intersection_approaches: dict[str, set[int]] = {}
         # Camera-First Design: реестр камер с метаданными
-        self.camera_registry: Dict[str, dict] = {}
+        self.camera_registry: dict[str, dict] = {}
         # Кэш upstream/downstream — топология графа динамична
-        self._upstream_cache: Dict[str, Dict[str, List[str]]] = {}
-        self._downstream_cache: Dict[str, Dict[str, List[str]]] = {}
+        self._upstream_cache: dict[str, dict[str, list[str]]] = {}
+        self._downstream_cache: dict[str, dict[str, list[str]]] = {}
         # Начинаем с пустого графа, строим из telemetry
         self._build_from_telemetry()
 
@@ -155,7 +155,7 @@ class CityTrafficGraph:
         self._register_camera_metadata(camera_data)
         self.rebuild_topology()
 
-    def register_cameras(self, cameras: List[dict]):
+    def register_cameras(self, cameras: list[dict]):
         """
         Зарегистрировать несколько камер за один вызов и перестроить граф ОДИН раз.
 
@@ -203,7 +203,7 @@ class CityTrafficGraph:
             best = self._find_nearest_ahead(cam_a, items, cam_a_id)
             if not best:
                 continue
-            cam_b_id, cam_b, _dist = best
+            _cam_b_id, cam_b, _dist = best
             inter_a = cam_a.get("intersection_id")
             inter_b = cam_b.get("intersection_id")
             dir_a = cam_a.get("direction")
@@ -217,8 +217,8 @@ class CityTrafficGraph:
                 lane_id=cam_a_id, connected=True,
             )
 
-    def _find_nearest_ahead(self, cam_a: dict, items: List[Tuple[str, dict]],
-                            self_id: str) -> Optional[Tuple[str, dict, float]]:
+    def _find_nearest_ahead(self, cam_a: dict, items: list[tuple[str, dict]],
+                            self_id: str) -> tuple[str, dict, float] | None:
         """Ближайшая противоположно-направленная камера строго впереди по лучу cam_a."""
         dir_a = cam_a.get("direction")
         pos_a = cam_a.get("position")
@@ -227,7 +227,7 @@ class CityTrafficGraph:
             return None
         want_dir = OPPOSITE_DIRECTION.get(dir_a)
 
-        best: Optional[Tuple[str, dict, float]] = None
+        best: tuple[str, dict, float] | None = None
         for cam_b_id, cam_b in items:
             if cam_b_id == self_id or cam_b.get("direction") != want_dir:
                 continue
@@ -359,7 +359,7 @@ class CityTrafficGraph:
             if data["intersection_id"] == intersection_id:
                 data["current_phase"] = phase
 
-    def get_lanes_for_intersection(self, intersection_id: str) -> List[dict]:
+    def get_lanes_for_intersection(self, intersection_id: str) -> list[dict]:
         """Получить все полосы перекрёстка (только зарегистрированные из данных)."""
         return [
             {"lane_id": lid, **data}
@@ -386,14 +386,14 @@ class CityTrafficGraph:
 
         total = 0.0
         count = 0
-        for lane_id, data in self.lane_pool.items():
+        for data in self.lane_pool.values():
             if data["intersection_id"] == intersection_id and data["approach"] in approaches:
                 total += data["congestion_index"]
                 count += 1
 
         return total / count if count > 0 else 0.0
 
-    def get_phase_for_approach(self, intersection_id: str, approach: str) -> Optional[str]:
+    def get_phase_for_approach(self, intersection_id: str, approach: str) -> str | None:
         """По подходу определить, к какой фазе он относится."""
         phases = self.intersection_phases.get(intersection_id, {})
         for phase_name in phases:
@@ -416,13 +416,13 @@ class CityTrafficGraph:
         self._upstream_cache.clear()
         self._downstream_cache.clear()
 
-        nodes_by_inter: Dict[str, List[str]] = {}
+        nodes_by_inter: dict[str, list[str]] = {}
         for (inter_id, approach) in self.graph.nodes:
             nodes_by_inter.setdefault(inter_id, []).append(approach)
 
         for inter_id, approaches in nodes_by_inter.items():
-            upstream_cache: Dict[str, List[str]] = {}
-            downstream_cache: Dict[str, List[str]] = {}
+            upstream_cache: dict[str, list[str]] = {}
+            downstream_cache: dict[str, list[str]] = {}
 
             for approach in approaches:
                 node = (inter_id, approach)
@@ -436,12 +436,12 @@ class CityTrafficGraph:
             self._upstream_cache[inter_id] = upstream_cache
             self._downstream_cache[inter_id] = downstream_cache
 
-    def get_upstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
+    def get_upstream_intersections(self, intersection_id: str) -> dict[str, list[str]]:
         """Для каждого подхода перекрёстка найти upstream перекрёстки."""
         return self._upstream_cache.get(intersection_id, {}).copy()
 
     def get_approach_toward(self, source_inter: str, target_inter: str,
-                            target_approach: str) -> Optional[str]:
+                            target_approach: str) -> str | None:
         """
         Найти подход на source_inter, который соединён дорогой с
         (target_inter, target_approach) — т.е. подход, с которого приезжают к цели.
@@ -454,11 +454,11 @@ class CityTrafficGraph:
                 return u[1]
         return None
 
-    def get_downstream_intersections(self, intersection_id: str) -> Dict[str, List[str]]:
+    def get_downstream_intersections(self, intersection_id: str) -> dict[str, list[str]]:
         """Для каждого подхода найти downstream перекрёстки."""
         return self._downstream_cache.get(intersection_id, {}).copy()
 
-    def calculate_cascade(self) -> List[dict]:
+    def calculate_cascade(self) -> list[dict]:
         """
         Metering магистрали: выравнивает загрузку соседних перекрёстков.
 
@@ -471,11 +471,11 @@ class CityTrafficGraph:
         Работает для любого числа дорог (1-4), т.к. топология из данных.
         Сложность: O(L + C) — L полос, C уже готовых upstream/downstream записей.
         """
-        commands: List[dict] = []
-        processed: Set[Tuple[str, str, str]] = set()
+        commands: list[dict] = []
+        processed: set[tuple[str, str, str]] = set()
 
         for inter_id in self.intersection_phases:
-            for lane_id, data in self.lane_pool.items():
+            for data in self.lane_pool.values():
                 if data["intersection_id"] != inter_id:
                     continue
 
@@ -535,7 +535,7 @@ class CityTrafficGraph:
         а не из хардкода). Возвращает перекрёстки (с позициями и числом дорог)
         и связи между ними.
         """
-        intersections: Dict[str, dict] = {}
+        intersections: dict[str, dict] = {}
         for inter_id, apps in self.intersection_approaches.items():
             intersections[inter_id] = {
                 "position": road_config.get_position(inter_id),

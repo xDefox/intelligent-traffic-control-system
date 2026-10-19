@@ -1,15 +1,18 @@
-import flet as ft
-import flet.canvas as cv
 import asyncio
 import csv
 import json
 import os
 import time
-import websockets
 import traceback
+from itertools import pairwise
+
+import flet as ft
+import flet.canvas as cv
+import websockets
 from dotenv import load_dotenv
-from backend.core.logger import debug, error
+
 from backend.core.lane_utils import denormalize_lane_id
+from backend.core.logger import debug, error
 from backend.UI.ui.map import TrafficMap
 
 load_dotenv()
@@ -317,7 +320,7 @@ class TrafficUIFactory:
             await asyncio.sleep(1.0)
             try:
                 self._flush_updates()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — fail-safe: падение рендера не должно убивать цикл
                 error("AdminPanel", f"_flush_loop ERROR: {e}")
                 traceback.print_exc()
 
@@ -392,7 +395,7 @@ class TrafficUIFactory:
             try:
                 from backend.services.statistics import traffic_stats
                 stats = traffic_stats.get_full_statistics()
-            except Exception:
+            except Exception:  # noqa: BLE001 — fallback: без статистики UI просто пустой
                 stats = {}
 
         if not stats:
@@ -581,7 +584,7 @@ class TrafficUIFactory:
             n = len(vals)
             step = width / (n - 1)
             pts = [(i * step, height - v * height) for i, v in enumerate(vals)]
-            for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            for (x1, y1), (x2, y2) in pairwise(pts):
                 color = "red" if max(y1, y2) < y70 else "cyan"
                 shapes.append(cv.Line(x1, y1, x2, y2, paint=ft.Paint(color=color, stroke_width=2)))
 
@@ -670,7 +673,7 @@ class TrafficUIFactory:
 
             msg = f"💾 Сохранено: {path}"
             debug("AdminPanel", f"CSV export: {path}")
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001 — ошибку экспорта показываем пользователем текстом
             msg = f"Ошибка экспорта: {ex}"
             error("AdminPanel", f"CSV export failed: {ex}")
 
@@ -776,11 +779,11 @@ class TrafficUIFactory:
                                     self._pending_lane_updates.append(lane_update)
                             elif msg_type == "lane_update":
                                 self._pending_lane_updates.append(data)
-                        except Exception:
+                        except Exception:  # noqa: BLE001 — игнорируем битые WS-сообщения
                             if self.page and self.page.update:
-                                pass  # Игнорируем битые сообщения
+                                pass
 
-            except Exception:
+            except Exception:  # noqa: BLE001 — обрыв WS переводим в статус «нет связи» и переподключаемся
                 self.status_text.value = "ПОТЕРЯ СВЯЗИ С UTC БЭКЕНДОМ..."
                 self.status_text.color = "red"
                 if self.page:
@@ -981,7 +984,7 @@ class TrafficUIFactory:
             cv.Line(0, height * 0.3, width, height * 0.3, paint=ft.Paint(color="#552222", stroke_width=1)),
         ]
         points = [(i * step, height - min(1.0, v) * height) for i, v in enumerate(values)]
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        for (x1, y1), (x2, y2) in pairwise(points):
             color = "red" if y2 < height * 0.3 else "cyan"
             shapes.append(cv.Line(x1, y1, x2, y2, paint=ft.Paint(color=color, stroke_width=2)))
         return cv.Canvas(shapes=shapes, width=width, height=height)
@@ -998,12 +1001,12 @@ class TrafficUIFactory:
                     params={"seconds": 300},
                 )
                 history = resp.json().get("history", [])
-        except Exception:
+        except Exception:  # noqa: BLE001 — бэкенд недоступен, читаем историю локально
             # Fallback: тот же процесс (бэкенд и UI запущены вместе).
             try:
                 from backend.services.statistics import traffic_stats
                 history = traffic_stats.get_intersection_timeseries(inter_id, 300)
-            except Exception:
+            except Exception:  # noqa: BLE001 — нет данных: рисуем пустой график
                 history = []
         if self._selected_intersection == inter_id:
             self._render_detail(inter_id, history)

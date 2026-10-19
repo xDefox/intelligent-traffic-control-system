@@ -1,19 +1,16 @@
 # backend/services/orchestrator.py
 import json
 import traceback
-from typing import Dict, List, Optional, Tuple
-from backend.models.traffic import (
-    BatchTelemetryDTO, SingleResponseDTO, CameraTelemetryDTO
-)
-from backend.services.graph_manager import traffic_network
+
+from backend.core.emergency import EmergencyDetector
+from backend.core.lane_utils import extract_approach_from_camera_id, normalize_lane_id
+from backend.core.logger import debug, error, info
+from backend.models.traffic import BatchTelemetryDTO, CameraTelemetryDTO, SingleResponseDTO
 from backend.services.cloud_orchestrator import CloudOrchestrator
+from backend.services.graph_manager import traffic_network
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.phase_manager import PhaseManager
 from backend.services.statistics import traffic_stats
-from backend.core.logger import debug, info, error
-from backend.core.lane_utils import normalize_lane_id, extract_approach_from_camera_id
-from backend.core.emergency import EmergencyDetector
-
 
 # ---------------------------------------------------------------------------
 # Параметры длительности зелёного и каскадного metering
@@ -42,7 +39,7 @@ class TrafficOrchestrator:
 
     async def handle_batch_telemetry(
         self, batch: BatchTelemetryDTO
-    ) -> Tuple[List[SingleResponseDTO], bool, Optional[str]]:
+    ) -> tuple[list[SingleResponseDTO], bool, str | None]:
         """Обработать batch-телеметрию с защитой от любых сбоев.
 
         Ни одна ошибка обработки не должна ронять эндпоинт (500): при сбое
@@ -53,7 +50,7 @@ class TrafficOrchestrator:
             return [], False, None
         try:
             return await self._handle_batch_telemetry_impl(batch)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — fail-safe: любой сбой батча → ответ «всем RED»
             error("Orchestrator", f"batch {batch.intersection_id} failed: {exc}")
             traceback.print_exc()
             return (
@@ -65,7 +62,7 @@ class TrafficOrchestrator:
 
     async def _handle_batch_telemetry_impl(
         self, batch: BatchTelemetryDTO
-    ) -> Tuple[List[SingleResponseDTO], bool, Optional[str]]:
+    ) -> tuple[list[SingleResponseDTO], bool, str | None]:
         """
         Обработать batch-телеметрию от ВСЕХ камер одного перекрёстка.
         
@@ -168,7 +165,7 @@ class TrafficOrchestrator:
 
     # ===================== ВЫДЕЛЕННЫЕ МЕТОДЫ =====================
 
-    def _detect_emergency(self, batch: BatchTelemetryDTO) -> Tuple[bool, Optional[str], Optional[str]]:
+    def _detect_emergency(self, batch: BatchTelemetryDTO) -> tuple[bool, str | None, str | None]:
         """ШАГ 0.5: Проверить batch на наличие спецтранспорта."""
         inter_id = batch.intersection_id
         emergency_detected, emergency_approach, emergency_phase = EmergencyDetector.detect(batch)
@@ -176,7 +173,7 @@ class TrafficOrchestrator:
             info("Orchestrator", f"🚨 Emergency: {inter_id}/{emergency_approach} → phase {emergency_phase}")
         return emergency_detected, emergency_approach, emergency_phase
 
-    def _register_cameras(self, cameras: List[CameraTelemetryDTO], inter_id: str):
+    def _register_cameras(self, cameras: list[CameraTelemetryDTO], inter_id: str):
         """ШАГ 0.5: Регистрация камер (Camera-First Design).
 
         Топология перестраивается ОДИН раз на батч (см. register_cameras):
@@ -195,7 +192,7 @@ class TrafficOrchestrator:
         if new_cameras:
             traffic_network.register_cameras(new_cameras)
 
-    def _update_lane_pool(self, cameras: List[CameraTelemetryDTO]):
+    def _update_lane_pool(self, cameras: list[CameraTelemetryDTO]):
         """ШАГ 1: Обновить lane_pool от ВСЕХ камер."""
         for cam in cameras:
             for lane in cam.lanes:
@@ -208,11 +205,11 @@ class TrafficOrchestrator:
                     max_capacity=lane.max_capacity,
                 )
 
-    def _decide_phase(self, inter_id: str, phase_names: List[str],
-                      green_wave_commands: List[dict],
-                      emergency_approach: Optional[str],
-                      cascade_commands: Optional[List[dict]] = None,
-                      emergency_phase: Optional[str] = None) -> Tuple[str, float, Optional[dict], Optional[dict]]:
+    def _decide_phase(self, inter_id: str, phase_names: list[str],
+                      green_wave_commands: list[dict],
+                      emergency_approach: str | None,
+                      cascade_commands: list[dict] | None = None,
+                      emergency_phase: str | None = None) -> tuple[str, float, dict | None, dict | None]:
         """ШАГ 3: Принять решение о фазе через PhaseManager."""
         phase_state = self.phase_manager.get_or_create(inter_id)
         self._apply_phase_bounds(inter_id, phase_state)
@@ -311,7 +308,7 @@ class TrafficOrchestrator:
         return active_phase, elapsed, emergency_override, green_wave_override
 
     def _calculate_green_duration(self, inter_id: str, active_phase: str,
-                                  phase_names: List[str]) -> float:
+                                  phase_names: list[str]) -> float:
         """ШАГ 4: Длительность зелёного на основе загруженности.
 
         ВАЖНО: машины считаются ТОЛЬКО по этому перекрёстку. Раньше цикл шёл по
@@ -334,14 +331,14 @@ class TrafficOrchestrator:
 
         return green_duration
 
-    def _get_cascade_commands(self) -> List[dict]:
+    def _get_cascade_commands(self) -> list[dict]:
         """Команды каскадного metering от cloud-тикера (пусто, если облака нет)."""
         if not self.cloud:
             return []
         return self.cloud.get_cascade_commands()
 
-    def _cascade_adjustment(self, inter_id: str, active_phase: Optional[str],
-                            cascade_commands: Optional[List[dict]]) -> Tuple[float, float]:
+    def _cascade_adjustment(self, inter_id: str, active_phase: str | None,
+                            cascade_commands: list[dict] | None) -> tuple[float, float]:
         """Суммарная урезка/продление зелёного активной фазы от каскада.
 
         Возвращает (reduce_by, extend_by) в секундах. Команда учитывается,
@@ -366,7 +363,7 @@ class TrafficOrchestrator:
                 extend_by += float(cmd.get("extend_green_by", 0.0))
         return reduce_by, extend_by
 
-    def _count_phase_cars(self, inter_id: str, phase_names: List[str]) -> Dict[str, int]:
+    def _count_phase_cars(self, inter_id: str, phase_names: list[str]) -> dict[str, int]:
         """Сумма машин по фазам ТОЛЬКО указанного перекрёстка.
 
         Единый источник подсчёта (используется и при выборе фазы, и при расчёте
@@ -397,7 +394,7 @@ class TrafficOrchestrator:
                     phase_state.max_duration = max(5.0, pd["max_duration"])
                 break
 
-    def _get_active_approaches(self, phases_config: Dict[str, dict], active_phase: str) -> List[str]:
+    def _get_active_approaches(self, phases_config: dict[str, dict], active_phase: str) -> list[str]:
         """ШАГ 5: Определить направления активной фазы."""
         for pn, pd in phases_config.items():
             if pn == active_phase:
@@ -432,8 +429,8 @@ class TrafficOrchestrator:
             phase=active_phase or "UNKNOWN",
         )
 
-    def apply_emergency_override(self, responses: List[SingleResponseDTO],
-                                 inter_id: str, emergency_phase: Optional[str]) -> List[SingleResponseDTO]:
+    def apply_emergency_override(self, responses: list[SingleResponseDTO],
+                                 inter_id: str, emergency_phase: str | None) -> list[SingleResponseDTO]:
         """
         Применить emergency_override к ответам: пометить камеры,
         принадлежащие emergency фазе, флагом emergency_override=True.
@@ -456,9 +453,9 @@ class TrafficOrchestrator:
         return responses
 
     def _build_responses(self, batch: BatchTelemetryDTO, inter_id: str,
-                         active_phase: str, active_approaches: List[str],
+                         active_phase: str, active_approaches: list[str],
                          green_duration: float, elapsed: float,
-                         green_wave_override: Optional[dict]) -> Tuple[List[SingleResponseDTO], List[dict]]:
+                         green_wave_override: dict | None) -> tuple[list[SingleResponseDTO], list[dict]]:
         """ШАГ 6: Сформировать ответы и UI-сообщения для всех камер."""
         responses = []
         batch_ui_payloads = []
@@ -529,8 +526,8 @@ class TrafficOrchestrator:
         return responses, batch_ui_payloads
 
     @staticmethod
-    def _pick_phase(phase_names: List[str], phase_cars: Dict[str, int],
-                    exclude: str = None) -> str:
+    def _pick_phase(phase_names: list[str], phase_cars: dict[str, int],
+                    exclude: str | None = None) -> str:
         """
         Выбрать фазу для переключения.
 

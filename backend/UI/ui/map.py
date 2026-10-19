@@ -1,4 +1,5 @@
 import math
+from itertools import pairwise
 
 import flet as ft
 import flet.canvas as cv
@@ -231,7 +232,7 @@ class TrafficMap:
             elif action in ("GREEN_WAVE", "GREEN_WAVE_SYNC"):
                 corridor = cmd.get("corridor") or []
                 if len(corridor) >= 2:
-                    pairs = list(zip(corridor, corridor[1:]))
+                    pairs = list(pairwise(corridor))
                 else:
                     src = cmd.get("target_intersection")
                     dst = cmd.get("trigger_intersection")

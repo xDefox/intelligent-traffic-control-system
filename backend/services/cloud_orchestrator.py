@@ -1,11 +1,11 @@
 # backend/services/cloud_orchestrator.py
 import asyncio
 import json
-from typing import Dict, List, Tuple
+
+from backend.core.logger import debug, error, info
 from backend.services.graph_manager import traffic_network
 from backend.services.green_wave import green_wave_coordinator
 from backend.services.statistics import traffic_stats
-from backend.core.logger import debug, info, error
 
 
 class CloudOrchestrator:
@@ -24,7 +24,7 @@ class CloudOrchestrator:
         self.ws_manager = ws_manager
         self._tick_task: asyncio.Task = None
         self._running = False
-        self._last_cascade_commands: List[dict] = []
+        self._last_cascade_commands: list[dict] = []
         
         # Emergency "зелёный коридор"
         self._emergency_active: bool = False
@@ -36,7 +36,7 @@ class CloudOrchestrator:
         
         # Для отслеживания изменений (статистика)
         self._prev_green_wave_active: bool = False
-        self._prev_intersection_phases: Dict[str, str] = {}
+        self._prev_intersection_phases: dict[str, str] = {}
     
     def report_emergency(self, intersection_id: str, approach: str, phase: str):
         """
@@ -97,7 +97,7 @@ class CloudOrchestrator:
         while self._running:
             try:
                 await self._cascade_tick()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — тикер обязан выживать после любой ошибки тика
                 error("CloudOrchestrator", f"Tick error: {e}")
 
             await asyncio.sleep(1.0)
@@ -129,7 +129,7 @@ class CloudOrchestrator:
 
     # ===================== ВЫДЕЛЕННЫЕ МЕТОДЫ =====================
 
-    def _process_green_wave(self, green_wave_commands: List[dict]):
+    def _process_green_wave(self, green_wave_commands: list[dict]):
         """Обработать команды зелёной волны: логирование в статистике при изменении состояния."""
         gw_cmds = [c for c in green_wave_commands if c.get("action") == "GREEN_WAVE_SYNC"]
         current_gw_active = len(gw_cmds) > 0
@@ -147,7 +147,7 @@ class CloudOrchestrator:
             traffic_stats.end_green_wave()
         self._prev_green_wave_active = current_gw_active
 
-    def _process_emergency(self, commands: List[dict]):
+    def _process_emergency(self, commands: list[dict]):
         """Обработать emergency "зелёный коридор": добавить команды и каскадировать на upstream."""
         if not self._emergency_active:
             return
@@ -179,7 +179,7 @@ class CloudOrchestrator:
                         up_phase = traffic_network.get_phase_for_approach(up_inter, up_approach)
                     if up_phase is None:
                         # Fallback: первый зарегистрированный подход upstream-перекрёстка
-                        for lane_id, data in traffic_network.lane_pool.items():
+                        for data in traffic_network.lane_pool.values():
                             if data["intersection_id"] == up_inter:
                                 up_phase = traffic_network.get_phase_for_approach(up_inter, data["approach"])
                                 break
@@ -207,15 +207,15 @@ class CloudOrchestrator:
             self._emergency_phase = None
             self._emergency_cascade_done = False
 
-    def _compute_intersection_summary(self) -> Tuple[int, Dict[str, dict]]:
+    def _compute_intersection_summary(self) -> tuple[int, dict[str, dict]]:
         """
         Вычислить агрегаты по перекрёсткам: общее число машин
         и сводка по каждому перекрёстку.
         """
         total_cars = sum(d["car_count"] for d in traffic_network.lane_pool.values())
-        inter_summary: Dict[str, dict] = {}
+        inter_summary: dict[str, dict] = {}
         
-        for lane_id, data in traffic_network.lane_pool.items():
+        for data in traffic_network.lane_pool.values():
             iid = data["intersection_id"]
             if iid not in inter_summary:
                 inter_summary[iid] = {"total_lanes": 0, "total_cars": 0, "avg_congestion": 0.0}
@@ -223,13 +223,12 @@ class CloudOrchestrator:
             inter_summary[iid]["total_cars"] += data["car_count"]
             inter_summary[iid]["avg_congestion"] += data.get("congestion_index", 0)
         
-        for iid in inter_summary:
-            lanes = inter_summary[iid]["total_lanes"]
-            inter_summary[iid]["avg_congestion"] /= max(lanes, 1)
+        for summary in inter_summary.values():
+            summary["avg_congestion"] /= max(summary["total_lanes"], 1)
         
         return total_cars, inter_summary
 
-    def _record_statistics(self, inter_summary: Dict[str, dict], commands: List[dict]):
+    def _record_statistics(self, inter_summary: dict[str, dict], commands: list[dict]):
         """Отслеживание переключений фаз по тикам (раз в секунду).
 
         Congestion-snapshot записывается в orchestrator._record_statistics()
@@ -251,8 +250,8 @@ class CloudOrchestrator:
             avg_cong = sum(s["avg_congestion"] for s in inter_summary.values()) / len(inter_summary)
             traffic_stats.record_network_snapshot(total_cars, avg_cong, len(inter_summary))
 
-    async def _broadcast_state(self, commands: List[dict], total_cars: int,
-                               inter_summary: Dict[str, dict]):
+    async def _broadcast_state(self, commands: list[dict], total_cars: int,
+                               inter_summary: dict[str, dict]):
         """Рассылка состояния через WebSocket для админ-панели."""
         if not self.ws_manager:
             return
@@ -283,7 +282,7 @@ class CloudOrchestrator:
         }
         await self.ws_manager.broadcast(json.dumps(state_payload))
 
-    def _get_intersection_phase(self, intersection_id: str, commands: List[dict]) -> str:
+    def _get_intersection_phase(self, intersection_id: str, commands: list[dict]) -> str:
         """
         Определить текущую фазу перекрёстка.
 
@@ -293,7 +292,7 @@ class CloudOrchestrator:
         дрожал на каждом тике.
         """
         # 1) Фактическая фаза из lane_pool
-        for lane_id, data in traffic_network.lane_pool.items():
+        for data in traffic_network.lane_pool.values():
             if data["intersection_id"] == intersection_id:
                 phase = data.get("current_phase")
                 if phase:
@@ -308,6 +307,6 @@ class CloudOrchestrator:
 
         return "UNKNOWN"
 
-    def get_cascade_commands(self) -> List[dict]:
+    def get_cascade_commands(self) -> list[dict]:
         """Последние каскадные команды (для Fog-контроллеров)"""
         return self._last_cascade_commands
